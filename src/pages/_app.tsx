@@ -3,6 +3,8 @@ import styles from "../styles/app.module.scss"
 
 import {Header} from '../components/Header'
 
+console.log("teste")
+
 function MyApp({ Component, pageProps }) {
   return (
     <div className={styles.wrapper}>
