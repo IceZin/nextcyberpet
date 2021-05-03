@@ -56,7 +56,7 @@ export function TimeBox(props) {
                         <tr>
                             <td>Água</td>
                             <td>-- --</td>
-                            <td>{props.params.info.water}s</td>
+                            <td>{props.params.info.water}min</td>
                         </tr>
                     </tbody>
                 </table>

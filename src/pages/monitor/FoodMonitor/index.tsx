@@ -1,5 +1,6 @@
 import { useContext, useEffect, useRef, useState } from 'react'
 import { Box } from '../../../components/Box'
+import { BoxButton } from '../../../components/BoxButton'
 import { BoxSwitch } from '../../../components/BoxSwitch'
 import { TimeBox } from '../../../components/TimeBox'
 import { WsContext } from '../../../contexts/WsContext'
@@ -284,7 +285,9 @@ export function FoodMonitor(props: MonitorProps) {
 
             <div className={styles.content} ref={contentRef}>
                 <Box name="Alimentação">
-                    <BoxSwitch src="/tint-solid.svg" state={false} onClick={(e) => console.log(timeBoxes)} title="Fluxo de água"></BoxSwitch>
+                    <BoxButton src="/bone-solid.svg" state={false} onClick={(e) => console.log(e)} title="Despejar ração"></BoxButton>
+                    <BoxSwitch src="/tint-solid.svg" state={false} onClick={(e) => console.log(e)} title="Fluxo de água"></BoxSwitch>
+                    <BoxSwitch src="/plug-solid.svg" state={false} onClick={(e) => console.log(e)} title="Modo automático"></BoxSwitch>
                 </Box>
 
                 <div className={styles.timeList}>

@@ -8,7 +8,7 @@ export function BoxButton(props) {
             props.onClick(props.id);
         }} className={styles.boxButton}>
             <img src={props.src} alt=""/>
-            <h3>{props.title + ' ' + props.state}</h3>
+            <h3>{props.title}</h3>
         </button>
     )
 }
