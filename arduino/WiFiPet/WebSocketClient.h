@@ -16,7 +16,7 @@ class WebSocketClient {
     void update();
     void scan();
     void sendBuff(byte buf[], int len);
-    void registerEvent(String type, void (*event)(int*));
+    void registerEvent(String type, void (*event)(int*, int));
 
     class LedControl *strip;
   private:
@@ -36,7 +36,7 @@ class WebSocketClient {
     void decodeData();
     void sendPong();
 
-    void (*onData)(int*);
+    void (*onData)(int*, int);
 
     double **phases;
     int p_len = 0;

@@ -1,0 +1,236 @@
+@use "sass:selector";
+
+.editBox {
+    width: 80%;
+    height: auto;
+
+    background-color: var(--gray-1000);
+
+    position: absolute;
+
+    left: 50%;
+    top: 50%;
+
+    z-index: 99;
+
+    border-radius: 0.5rem;
+
+    overflow: hidden;
+
+    &.hidden {
+        transform: translate(-50%, -50%) scale(0);
+        transition: transform 0.2s;
+    }
+
+    &.visible {
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    header {
+        width: 100%;
+        height: 3rem;
+
+        background-color: var(--red-100);
+
+        display: flex;
+
+        align-items: center;
+
+        padding: 0 1rem;
+
+        .optionBox {
+            width: auto;
+            height: auto;
+
+            display: flex;
+            gap: 1rem;
+
+            position: absolute;
+            right: 1rem;
+
+            button {
+                width: 2rem;
+                height: 2rem;
+
+                display: flex;
+                align-items: center;
+                justify-content: center;
+
+                background-color: transparent;
+
+                img {
+                    width: 1.5rem;
+                    height: 1.5rem;
+                }
+            }
+        }
+    }
+
+    .editContent {
+        width: 100%;
+        height: 100%;
+
+        display: flex;
+        flex-direction: column;
+
+        gap: 1rem;
+        padding: 1rem;
+
+        .config {
+            width: 100%;
+            height: 3rem;
+
+            display: flex;
+            align-items: center;
+
+            padding: 0 1rem;
+
+            border-radius: 0.5rem;
+
+            background-color: var(--red-100);
+
+            @at-root #{selector.unify(&, button)} {
+                img {
+                    width: 1.5rem;
+                    height: 1.5rem;
+                    
+                    position: absolute;
+                    right: 1rem;
+                }
+            }
+
+            .timeInput {
+                width: 6rem;
+                height: 2.25rem;
+
+                background-color: var(--red-300);
+
+                position: absolute;
+                right: 1rem;
+
+                display: flex;
+                justify-content: center;
+
+                border-radius: 0.5rem;
+
+                box-shadow: inset 0px 4px 4px rgba(0, 0, 0, 0.25);
+
+                color: #fff;
+                font-family: Lexend, sans-serif;
+
+                border: 0;
+                outline: 0;
+            }
+
+            .value {
+                width: 6rem;
+                height: 2.25rem;
+
+                background-color: var(--red-300);
+
+                position: absolute;
+                right: 1rem;
+
+                text-align: center;
+
+                border-radius: 0.5rem;
+
+                box-shadow: inset 0px 4px 4px rgba(0, 0, 0, 0.25);
+
+                color: #fff;
+                font-family: Lexend, sans-serif;
+
+                border: 0;
+                outline: 0;
+
+                display: flex;
+
+                input {
+                    width: 70%;
+                    height: 100%;
+                    background-color: transparent;
+                    border: 0;
+                    color: #fff;
+                    font-family: Lexend, sans-serif;
+                    text-align: center;
+                    outline: 0;
+                }
+
+                span {
+                    width: 30%;
+                    height: 100%;
+
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                }
+            }
+        }
+    }
+}
+
+.content {
+    width: 100vw;
+    height: calc(100vh - 6rem);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    padding: 2rem;
+
+    gap: 2rem;
+
+    .mainBox {
+        height: 18rem;
+        width: 100%;
+
+        background-color: var(--red-200);
+    }
+
+    .timeList {
+        height: 100%;
+        width: 100%;
+
+        background-color: var(--red-200);
+
+        position: relative;
+
+        overflow-y: scroll;
+
+        header {
+            width: 100%;
+            height: 3rem;
+
+            background-color: var(--red-100);
+        
+            display: flex;
+
+            align-items: center;
+
+            padding: 0.5rem;
+
+            button {
+                position: absolute;
+                right: 1rem;
+                width: 1.5rem;
+                height: 1.5rem;
+                background-color: transparent;
+            }
+        }
+
+        .timeContent {
+            width: 100%;
+            height: auto;
+
+            display: flex;
+            flex-direction: column;
+
+            gap: 1rem;
+
+            padding: 1rem;
+
+            position: relative;
+        }
+    }
+}

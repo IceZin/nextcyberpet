@@ -1,14 +1,14 @@
+import { Switch } from '../Switch';
 import styles from './styles.module.scss';
-import Link from 'next/link'
-import { useEffect, useState } from 'react';
 
-export function BoxButton(props) {
+export function BoxSwitch(props) {
     return (
         <button onClick={() => {
             props.onClick(props.id);
         }} className={styles.boxButton}>
             <img src={props.src} alt=""/>
-            <h3>{props.title + ' ' + props.state}</h3>
+            <h3>{props.title}</h3>
+            <Switch enabled={props.state}></Switch>
         </button>
     )
 }

@@ -1,5 +1,5 @@
 class WsManager {
-    constructor(ws, req, cookies) {
+    constructor(sock, req, cookies) {
         this.events = {};
         this.pingTimeout = null;
         this.lossTimer = null;
@@ -7,32 +7,26 @@ class WsManager {
         this.maxLoss = 10;
         this.packetLoss = 0;
         this.awaitingPing = false;
-        this.ws = ws;
+        this.sock = sock;
 
-        this.ws.onmessage = (msg) => {
-            const data = JSON.parse(msg.data);
-
-            if (data.type == 0x0) this.awaitingPing = false;
+        this.sock.on('data', (data) => {
+            if (data[0] == 0x0) this.awaitingPing = false;
             else if (this.events["data"] != undefined) this.events["data"](data);
-        };
+        });
+
+        this.sock.on('error', (err) => {
+            console.log(err);
+        })
 
         this.pingTimeout = setTimeout(this.ping.bind(this), this.pingTime);
 
         setInterval(() => {
-            this.sendJSON({
-                type: 0x1,
-                data: {
-                    action: "updateState",
-                    ctg: "shortcuts",
-                    el: 0,
-                    state: false
-                }
-            })
+            this.sendBuffer(Buffer.from([0x1, 0x2, 0x2, 0xf]))
         }, 10000);
     }
 
-    sendJSON(json) {
-        this.ws.send(JSON.stringify(json));
+    sendBuffer(buff) {
+        this.sock.write(buff);
     }
 
     clearTimeouts() {
@@ -43,7 +37,7 @@ class WsManager {
     ping() {
         if (!this.awaitingPing) {
             try {
-                this.sendJSON({type: 0x0});
+                this.sock.write(Buffer.from([0x0]));
             } catch (error) {
                 console.log(error)
             }
@@ -59,7 +53,7 @@ class WsManager {
 
                     if (this.packetLoss >= this.maxLoss) {
                         if (this.events['end'] != null) this.events['end']();
-                        this.ws.close();
+                        this.sock.end();
                     } else {
                         this.ping();
                     }

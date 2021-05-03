@@ -22,7 +22,7 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx"
-  ],
+, "server/components/WsManager.js", "server/index.js", "server/components/WsManager.js", "server/index.js"  ],
   "exclude": [
     "node_modules",
     "server"

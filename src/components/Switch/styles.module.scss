@@ -1,0 +1,36 @@
+.box {
+    width: 4rem;
+    height: 2rem;
+
+    border-radius: 1rem;
+
+    background-color: var(--gray-1000);
+
+    display: flex;
+    position: relative;
+    align-items: center;
+
+    margin-left: auto;
+    margin-right: 0.5rem;
+
+    padding: 0.3rem;
+    
+    span {
+        width: 1.4rem;
+        height: 1.4rem;
+
+        border-radius: 50%;
+
+        background-color: var(--gray-800);
+
+        position: relative;
+        left: 0;
+
+        transition: left 0.2s;
+
+        &.on {
+            background-color: var(--gray-100);
+            left: 60%;
+        }
+    }
+}

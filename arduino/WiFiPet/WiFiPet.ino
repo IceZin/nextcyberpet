@@ -28,6 +28,17 @@ void loop() {
 }
 
 //Dados que vem do aplicativo
-void onData(int* data) {
-  Serial.println(data[1]);
+void onData(int* data, int dataLen) {
+  for (int i = 0; i < dataLen; i++) {
+    Serial.print("Packet index ");
+    Serial.print(i);
+    Serial.print(" - ");
+    Serial.println(data[i]);
+  }
+
+  if (data[0] == 0x1) {
+    if (data[1]) {
+      
+    }
+  }
 }

@@ -114,11 +114,11 @@ void WebSocketClient::decodeData() {
 
     for (byte i = 0; i < LEN; i++) data[i] = client->read();
 
-    onData(data);
+    onData(data, LEN);
   }
 }
 
-void  WebSocketClient::registerEvent(String type, void (*event)(int*)) {
+void  WebSocketClient::registerEvent(String type, void (*event)(int*, int)) {
   if (type == "data") {
     onData = *event;
   }
@@ -134,7 +134,7 @@ void WebSocketClient::update() {
   if (WiFi.status() != WL_CONNECTED) connectToWifi();
   
   if (!client->connected()) {
-     client->connect(host.c_str(), 1107);
+     client->connect(host.c_str(), 1108);
      awaitingUpgrade = true;
   }
   

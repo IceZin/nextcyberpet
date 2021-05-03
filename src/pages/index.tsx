@@ -1,13 +1,41 @@
-import styles from './index.module.scss'
 import {Box} from '../components/Box'
 import {BoxButton} from '../components/BoxButton'
+import {BoxSwitch} from '../components/BoxSwitch'
 import {BoxHrefButton} from '../components/BoxHrefButton'
 
-function btnOnUpdate(e) {
-  console.log(e);
-}
+import { useContext, useEffect, useState } from 'react'
+
+import styles from './index.module.scss'
+import { WsContext } from '../contexts/WsContext'
 
 export default function Home() {
+  let [state, setState] = useState(Boolean);
+  let {ws} = useContext(WsContext)
+
+  useEffect(() => {
+    if (ws == undefined) return;
+
+    ws.on("Home", "data", (packet) => {
+      console.log(packet);
+
+      if (packet.action == "updateState") {
+        setState(state => (!state));
+      }
+    })
+  }, [ws])
+
+  function shortcutClick(btn: string) {
+    console.log(btn)
+  
+    ws.sendJSON({
+      type: 0x1,
+      data: {
+        action: "toggle",
+        trigger: btn
+      }
+    })
+  }
+
   return (
     <div className={styles.content}>
       <Box name="Monitoramento & Controle" displayType="grid">
@@ -18,9 +46,9 @@ export default function Home() {
       </Box>
 
       <Box name="Controle Rapido" displayType="flex">
-        <BoxButton onUpdate={btnOnUpdate} src="/moon-solid.svg" title="Modo noturno"></BoxButton>
-        <BoxButton src="/thermometer-half-solid.svg" title="Controle automático de temperatura"></BoxButton>
-        <BoxButton src="/wind-solid.svg" title="Remover odor"></BoxButton>
+        <BoxSwitch state={state} onClick={shortcutClick} id="night-btn" src="/moon-solid.svg" title="Modo noturno"></BoxSwitch>
+        <BoxSwitch state={false} onClick={shortcutClick} src="/thermometer-half-solid.svg" title="Controle automático de temperatura"></BoxSwitch>
+        <BoxSwitch state={false} onClick={shortcutClick} src="/wind-solid.svg" title="Remover odor"></BoxSwitch>
       </Box>
 
       <Box name="Camera interna" displayType="flex">
