@@ -1,19 +1,52 @@
 const { createServer } = require('http')
 const { parse } = require('url')
 const next = require('next')
+const fs = require('fs');
 const WebSocket = require('ws');
 const WsManager = require('./components/WsManager.js');
-const SockManager = require('./components/SockManager.js');
+const SockManager = require('./components/DevSockManager.js');
+const tm = require('./components/TimeManager.js');
+const ChannelsManager = require('./components/Channels.js');
+const ComplexObject = require('./components/ComplexObject.js')
+
+const TimeManager =  new tm();
 
 const dev = process.env.NODE_ENV !== 'production'
 const app = next({ dev })
 const handle = app.getRequestHandler()
 const wss = new WebSocket.Server({ noServer: true });
 
+const Channels = new ChannelsManager();
+
 var client;
 var wsClients = {};
 
-var feedTimes = {}
+// [---] Channels Initialization [---]
+
+const mainInfo = Channels.newChannel("Main", {
+    nightMode: false
+});
+const feedInfo = Channels.newChannel("FoodMonitor", {
+    auto: true,
+    waterFlow: false
+});
+const lightInfo = Channels.newChannel("LightMonitor", {
+    auto: false,
+    light: false,
+    chartData: {}
+});
+const tempInfo = Channels.newChannel("TempMonitor", {
+    auto: false,
+    airFlow: false,
+    chartData: {}
+});
+const camInfo = Channels.newChannel("CameraMonitor", {
+    showOnMenu: false
+});
+
+console.log(feedInfo);
+
+// [---] Broadcast to Clients [---]
 
 function broadcast(data) {
     Object.values(wsClients).forEach(client => {
@@ -21,13 +54,29 @@ function broadcast(data) {
     })
 }
 
-const clientDataHandler = {
+// [---] Food Monitor Channel [---]
+var feedTimes = {}
+
+feedInfo.registerUpdateCallback((option) => {
+    broadcast({
+        type: 0x1,
+        channel: "FeedMonitor",
+        data: {
+            action: "toggleOption",
+            option: option,
+            state: feedInfo.getOption(option)
+        }
+    })
+})
+
+const foodMonitorHandler = {
     "toggleFeedTime": (data) => {
         if (feedTimes[data.boxTime] != null) {
             feedTimes[data.boxTime].state = !feedTimes[data.boxTime].state;
 
             broadcast({
                 type: 0x1,
+                channel: "FeedMonitor",
                 data: {
                     action: "toggleFeedTime",
                     box: {
@@ -36,6 +85,8 @@ const clientDataHandler = {
                     }
                 }
             })
+
+            client.setFeedTimeState(data.boxTime, feedTimes[data.boxTime].state)
         }
     },
     "newFeedTime": (data) => {
@@ -51,6 +102,7 @@ const clientDataHandler = {
 
         broadcast({
             type: 0x1,
+            channel: "FeedMonitor",
             data: {
                 action: "newFeedTime",
                 box: {
@@ -61,7 +113,7 @@ const clientDataHandler = {
         })
 
         if (client != null) {
-            client.sendBuffer(Buffer.from([0x1, 0x3, 0x1, 0x1, 0x0]));
+            client.addFeedTime(data.params.time, data.params.info.food, data.params.info.water, false);
         }
     },
     "deleteFeedTime": (data) => {
@@ -70,11 +122,16 @@ const clientDataHandler = {
 
             broadcast({
                 type: 0x1,
+                channel: "FeedMonitor",
                 data: {
                     action: "deleteFeedTime",
                     boxTime: data.boxTime
                 }
             })
+
+            if (client != null) {
+                client.removeFeedTime(data.boxTime);
+            }
         }
     },
     "editFeedTime": (data) => {
@@ -93,6 +150,7 @@ const clientDataHandler = {
 
             broadcast({
                 type: 0x1,
+                channel: "FeedMonitor",
                 data: {
                     action: "editFeedTime",
                     boxTime: oldTime,
@@ -103,24 +161,323 @@ const clientDataHandler = {
                     }
                 }
             })
+
+            client.editFeedTime(oldTime, newTime, data.params.water, data.params.food);
+        }
+    },
+    "toggleOption": (data) => {
+        if (feedInfo.options[data.option] != null) {
+            feedInfo.setOption(data.option, !feedInfo.options[data.option]);
+
+            if (data.option == "waterFlow") {
+                client.toggleFeedOption(0x0, feedInfo.options[data.option]);
+            } else if (data.option == "auto") {
+                client.toggleFeedOption(0x1, feedInfo.options[data.option]);
+            }
         }
     }
 }
 
+Channels.registerCallback("FoodMonitor", (data) => {
+    try {
+        foodMonitorHandler[data.action](data);
+    } catch (error) {
+        
+    }
+})
+
+// [---] Light Monitor Channel [---]
+
+const lightMonitorHandler = {
+    "toggleOption": (data) => {
+        if (lightInfo[data.option] != null) {
+            lightInfo[data.option] = !lightInfo[data.option];
+
+            broadcast({
+                type: 0x1,
+                channel: data.channel,
+                data: {
+                    action: "toggleOption",
+                    option: data.option,
+                    state: lightInfo[data.option]
+                }
+            })
+        }
+    }
+}
+
+Channels.registerCallback("LightMonitor", (data) => {
+    try {
+        lightMonitorHandler[data.action](data);
+    } catch (error) {
+        
+    }
+})
+
+// [---] Temperature Monitor Channel [---]
+
+var sharedTempVars = {
+    airFlow: (state) => {
+        mainInfo.airFlow = state;
+
+        broadcast({
+            type: 0x1,
+            channel: "Main",
+            data: {
+                action: "toggleOption",
+                option: "airFlow",
+                state
+            }
+        })
+    }
+}
+
+tempInfo.registerUpdateCallback((option) => {
+    try {
+        sharedTempVars[option](tempInfo.getOption(option));
+    } catch (error) {
+        
+    }
+
+    broadcast({
+        type: 0x1,
+        channel: "TempMonitor",
+        data: {
+            action: "toggleOption",
+            option: option,
+            state: tempInfo.getOption(option)
+        }
+    })
+})
+
+const tempMonitorHandler = {
+    "toggleOption": (data) => {
+        if (tempInfo.options[data.option] != null) {
+            tempInfo.setOption(data.option, !tempInfo.options[data.option])
+        }
+    }
+}
+
+Channels.registerCallback("TempMonitor", (data) => {
+    try {
+        tempMonitorHandler[data.action](data);
+    } catch (error) {
+        
+    }
+})
+
+// [---] Camera Monitor Channel [---]
+
+const cameraMonitorHandler = {
+    "toggleOption": (data) => {
+        if (camInfo.options[data.option] != null) {
+            camInfo.setOption(data.option, !camInfo.options[data.option])
+        }
+    }
+}
+
+Channels.registerCallback("CameraMonitor", (data) => {
+    try {
+        cameraMonitorHandler[data.action](data);
+    } catch (error) {
+        
+    }
+})
+
+// [---] Main Channel [---]
+
+var mainRefValsHandler = {
+    airFlow: (state) => {
+        temperatureInfo.airFlow = state;
+
+        broadcast({
+            type: 0x1,
+            channel: "TempMonitor",
+            data: {
+                action: "toggleOption",
+                option: "airFlow",
+                state
+            }
+        })
+    }
+}
+
+const mainHandler = {
+    "toggleOption": (data) => {
+        if (mainInfo[data.option] != null) {
+            mainInfo[data.option] = !mainInfo[data.option];
+
+            if (mainRefValsHandler[data.option] != undefined)
+                mainRefValsHandler[data.option](mainInfo[data.option]);
+
+            broadcast({
+                type: 0x1,
+                channel: data.channel,
+                data: {
+                    action: "toggleOption",
+                    option: data.option,
+                    state: mainInfo[data.option]
+                }
+            })
+        }
+    }
+}
+
+Channels.registerCallback("Main", (data) => {
+    try {
+        console.log(data);
+        mainHandler[data.action](data);
+    } catch (error) {
+        
+    }
+})
+
+// [---] Device Data Handler [---]
+
+const dvcFeedManager = {
+    0x0: (data) => {
+        data.splice(0, 1);
+    },
+    0x1: (data) => {
+        data.splice(0, 1);
+    },
+    0x2: (data) => {
+        data.splice(0, 1);
+    }
+}
+
+const dvcLightManager = {
+    0x0: (data) => {
+        data.splice(0, 1);
+
+        /*temperatureInfo.times.push({
+            time: 
+        })
+
+        broadcast({
+            
+        })*/
+    },
+    0x1: (data) => {
+        data.splice(0, 1);
+    },
+    0x2: (data) => {
+        data.splice(0, 1);
+    }
+}
+
+const dvcTempManager = {
+    0x0: (data) => {
+        data.splice(0, 1);
+
+        /*temperatureInfo.times.push({
+            time: 
+        })
+
+        broadcast({
+            
+        })*/
+    },
+    0x1: (data) => {
+        data.splice(0, 1);
+    },
+    0x2: (data) => {
+        data.splice(0, 1);
+    }
+}
+
+var camPacketInProgress = false;
+var camImg = Buffer.from([]);
+
+const dvcCameraManager = {
+    0x0: (data) => {
+        if (data[3] == 0xf) {
+            camPacketInProgress = true;
+            console.log("Pic frame started");
+            camImg = Buffer.from([]);
+        } else if (data[3] == 0xe) {
+            camPacketInProgress = false;
+        }
+    },
+    0x1: (data) => {
+        data.splice(0, 1);
+    },
+    0x2: (data) => {
+        data.splice(0, 1);
+    }
+}
+
+const dvcChannels = {
+    0x0: dvcFeedManager,
+    0x1: dvcLightManager,
+    0x2: dvcTempManager,
+    0x3: dvcCameraManager
+}
+
+function syncDevice() {
+    Object.keys(feedTimes).map(time => {
+        client.addFeedTime(time, feedTimes[time].info.food, feedTimes[time].info.water, feedTimes[time].state);
+    })
+
+    client.toggleFeedOption(0x0, feedInfo.options.waterFlow);
+    client.toggleFeedOption(0x1, feedInfo.options.auto);
+}
+
+// [---] Upgrade Handler [---]
+
 const upgradeHandlers = {
     "PHDevice": function(req, sock, head, cookies) {
-        console.log(req.headers);
+        //console.log(req.headers);
 
         sock.write('HTTP/1.1 101 Switching Protocols\r\n\r\n');
 
         client = new SockManager(sock, req, cookies);
 
-        client.on("data", function(data) {
+        syncDevice();
 
+        client.sendBuffer(
+            Buffer.from(
+                [0x1, 0x3, 0x2, 0x0, 0x1]
+            )
+        )
+
+        client.on("data", function(data) {
+            if (data.length < 10) console.log(data);
+
+            if (camPacketInProgress) {
+                camImg = Buffer.concat([camImg, data]);
+
+                if (data[1] == 0x3 && data[2] == 0x0 && data[3] == 0xe) {
+                    camPacketInProgress = false;
+                    console.log(camImg);
+                    console.log("Pic frame ended");
+                    broadcast({
+                        type: 0x1,
+                        channel: "CameraMonitor",
+                        data: {
+                            action: "showImage",
+                            camImg
+                        }
+                    })
+
+                    fs.writeFileSync('rgb565.png', camImg)
+                }
+                return;
+            }
+
+            try {
+                if (data[0] == 0x1) {
+                    dvcChannels[data[1]][data[2]](data);
+                } else if (data[0] == 0x2) {
+    
+                }
+            } catch (error) {
+                console.log(error);
+            }
         })
     },
     "WsClient": function(req, sock, head, cookies) {
-        console.log(req.headers);
+        //console.log(req.headers);
 
         wss.handleUpgrade(req, sock, head, function(ws) {
             wss.emit('connection', ws, req);
@@ -132,16 +489,8 @@ const upgradeHandlers = {
             }
 
             wsClients[addr] = wsClient;
-            
-            wsClient.on("data", function(packet) {
-                console.log(packet.data);
 
-                try {
-                    clientDataHandler[packet.data.action](packet.data);
-                } catch (err) {
-                    console.log(err);
-                }
-            })
+            Channels.registerWS(wsClient)
 
             wsClient.on("end", function() {
                 console.log("Ws Client Ended")
@@ -150,6 +499,8 @@ const upgradeHandlers = {
         })
     }
 }
+
+// [---] Cookie Parser [---]
 
 function getCookies(raw) {
     if (raw == undefined) return {};
@@ -170,32 +521,76 @@ function getCookies(raw) {
     return arr;
 }
 
+// [---] Paths Managers [---]
+
+const apiPaths = {
+    'feed_info': (res, parsedUrl) => {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({
+            feedTimes,
+            feedOptions: feedInfo.options
+        }));
+    },
+    'light_info': (res, parsedUrl) => {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({
+            lightInfo: lightInfo.options
+        }));
+    },
+    'temp_info': (res, parsedUrl) => {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({
+            temperatureInfo: tempInfo.options
+        }));
+    },
+    'main_info': (res, parsedUrl) => {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({
+            mainInfo: mainInfo.options
+        }));
+    },
+    'camera_info': (res, parsedUrl) => {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({
+            camInfo: camInfo.options
+        }));
+    }
+}
+
 const pathsHandler = {
     'api': (req, res, parsedUrl) => {
         let { pathname, query } = parsedUrl;
 
-        pathname = pathname.split('/').splice(0, 1);
+        pathname = pathname.split('/');
+        pathname.splice(0, 1);
 
-        res.statusCode = 200;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify(feedTimes));
+        try {
+            apiPaths[pathname[1]](res, parsedUrl)
+        } catch (err) {
+            console.log(err)
+        }
     }
 }
 
+// [---] App Initialization [---]
+
 app.prepare().then(() => {
     const httpserver = createServer((req, res) => {
-        console.log("[*] New Request");
+        /*console.log("[*] New Request");
         console.log(req.method);
         console.log(req.url);
-        console.log(req.headers);
+        console.log(req.headers);*/
 
         const parsedUrl = parse(req.url, true);
         let { pathname, query } = parsedUrl;
 
         pathname = pathname.split('/');
         pathname.splice(0, 1);
-
-        console.log(pathname)
 
         try {
             pathsHandler[pathname[0]](req, res, parsedUrl)
@@ -210,12 +605,11 @@ app.prepare().then(() => {
             return;
         }
     
-        console.log("[*] New UPGRADE request " + req.headers["sec-websocket-protocol"]);
-    
-        console.log(req.headers)
+        //console.log("[*] New UPGRADE request " + req.headers["sec-websocket-protocol"]);
+        //console.log(req.headers)
     
         let cookies = getCookies(req.headers.cookie);
-        console.log(cookies);
+        //console.log(cookies);
     
         if (upgradeHandlers[req.headers["sec-websocket-protocol"]] == undefined) {
             sock.end('HTTP/1.1 400 Bad Request\r\n\r\n');
@@ -228,5 +622,6 @@ app.prepare().then(() => {
     httpserver.listen(1108, (err) => {
         if (err) throw err
         console.log('> Ready on http://localhost:1108')
+        //TimeManager.newInterval(sendTempRequest, 1000 * 60 * 15);
     });
 })

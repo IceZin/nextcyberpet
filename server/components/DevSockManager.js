@@ -8,17 +8,21 @@ class WsManager {
         this.packetLoss = 0;
         this.awaitingPing = false;
         this.sock = sock;
+        this.bytes = 0;
 
         this.sock.on('data', (data) => {
-            if (data[0] == 0x0) this.awaitingPing = false;
-            else if (this.events["data"] != undefined) this.events["data"](data);
+            //console.log(data);
+            this.bytes += data.length;
         });
+
+        setInterval(() => {
+            console.log(`Received ${this.bytes} bytes in 1 second`);
+            this.bytes = 0;
+        }, 1000);
 
         this.sock.on('error', (err) => {
             console.log(err);
         })
-
-        this.pingTimeout = setTimeout(this.ping.bind(this), this.pingTime);
 
         this.syncTime();
     }

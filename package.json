@@ -10,6 +10,7 @@
   "author": "IceZin",
   "license": "ISC",
   "dependencies": {
+    "chart.js": "^3.2.1",
     "next": "^10.1.3",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",

@@ -54,6 +54,28 @@ void WebSocketClient::connectToWs() {
   awaitTime = millis();
 }
 
+void WebSocketClient::writePic(byte buf[], int len) {
+  if (!client->connected() or uploadInProgress) return;
+
+  /*for (int i = 0; i < len; i++) {
+    Serial.println(buf[i]);
+  }
+
+  Serial.println("[Pic end]");
+  Serial.println(len);*/
+  
+  byte startFrame[4] = {0x1, 0x3, 0x0, 0xf};
+  byte endFrame[4] = {0x1, 0x3, 0x0, 0xe};
+
+  uploadInProgress = true;
+  
+  client->write(startFrame, sizeof(startFrame));
+  client->write(buf, len);
+  client->write(endFrame, sizeof(endFrame));
+
+  uploadInProgress = false;
+}
+
 void WebSocketClient::sendBuff(byte buf[], int len) {
   client->write(buf, len);
 }
@@ -77,6 +99,8 @@ void WebSocketClient::readWs() {
           lastAction = millis();
 
           Serial.println("Connected to WS Server");
+
+          onConnect();
         }
         
         memset(tmpData, 0, sizeof(tmpData));
@@ -124,6 +148,10 @@ void  WebSocketClient::registerEvent(String type, void (*event)(int*, int)) {
   }
 }
 
+void  WebSocketClient::registerOnConnect(String type, void (*event)()) {
+   onConnect = *event;
+}
+
 void WebSocketClient::clearBuffer() {
   while (client->available() > 0) {
     client->read();
@@ -135,6 +163,7 @@ void WebSocketClient::update() {
   
   if (!client->connected()) {
      client->connect(host.c_str(), 1108);
+     client->setNoDelay(1);
      awaitingUpgrade = true;
   }
   
@@ -144,7 +173,7 @@ void WebSocketClient::update() {
     connectToWs();
   }
 
-  if (!awaitingUpgrade) {
+  /*if (!awaitingUpgrade) {
     if (millis() - lastAction > 12000) {
       client->stop();
       awaitingUpgrade = true;
@@ -152,7 +181,7 @@ void WebSocketClient::update() {
       Serial.println("[!] Server is not sending ping packets");
       Serial.println("[!] Disconnected");
     }
-  }
+  }*/
   
   if (client->available() > 0) readWs();
   

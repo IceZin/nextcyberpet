@@ -17,18 +17,6 @@ class WsManager {
         };
 
         this.pingTimeout = setTimeout(this.ping.bind(this), this.pingTime);
-
-        setInterval(() => {
-            this.sendJSON({
-                type: 0x1,
-                data: {
-                    action: "updateState",
-                    ctg: "shortcuts",
-                    el: 0,
-                    state: false
-                }
-            })
-        }, 10000);
     }
 
     sendJSON(json) {

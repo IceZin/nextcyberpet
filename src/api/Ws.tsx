@@ -7,9 +7,19 @@ export class Ws {
     };
 
     constructor() {
-        this.ws = new WebSocket("ws://192.168.0.10:1108/", ["WsClient"])
-        
         this.events = {};
+        this.connect();
+        setInterval(() => {
+            if (this.ws.readyState == WebSocket.CLOSED) this.connect();
+        }, 5000);
+    }
+
+    connect() {
+        const ip = window.location.host;
+
+        console.log(ip);
+
+        this.ws = new WebSocket(`ws://${ip}/`, ["WsClient"])
 
         this.ws.onmessage = (msg) => {
             const data = JSON.parse(msg.data);

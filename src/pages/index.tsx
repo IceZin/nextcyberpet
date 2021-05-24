@@ -8,21 +8,37 @@ import { useContext, useEffect, useState } from 'react'
 import styles from './index.module.scss'
 import { WsContext } from '../contexts/WsContext'
 
-export default function Home() {
-  let [state, setState] = useState(Boolean);
+type PageInfo = {
+  nightMode: boolean
+  autoTempCtrl: boolean
+  airFlow: boolean
+}
+
+type Props = {
+  mainInfo: PageInfo
+}
+
+export default function Home(props: PageInfo) {
+  let [pageInfo, setPageInfo] = useState({} as PageInfo);
   let {ws} = useContext(WsContext)
+
+  useEffect(() => {
+    console.log(props);
+    setPageInfo(props);
+  }, [])
 
   useEffect(() => {
     if (ws == undefined) return;
 
-    ws.on("Home", "data", (packet) => {
+    ws.on("Main", "data", (packet) => {
       console.log(packet);
 
-      if (packet.action == "updateState") {
-        setState(state => (!state));
+      if (packet.action == "toggleOption") {
+        setPageInfo({...pageInfo, ...{[packet.option]: packet.state}});
+        console.log(pageInfo);
       }
     })
-  }, [ws])
+  }, [ws, pageInfo])
 
   function shortcutClick(btn: string) {
     console.log(btn)
@@ -46,9 +62,48 @@ export default function Home() {
       </Box>
 
       <Box name="Controle Rapido" displayType="flex">
-        <BoxSwitch state={state} onClick={shortcutClick} id="night-btn" src="/moon-solid.svg" title="Modo noturno"></BoxSwitch>
-        <BoxSwitch state={false} onClick={shortcutClick} src="/thermometer-half-solid.svg" title="Controle automático de temperatura"></BoxSwitch>
-        <BoxSwitch state={false} onClick={shortcutClick} src="/wind-solid.svg" title="Remover odor"></BoxSwitch>
+        <BoxSwitch 
+          src="/moon-solid.svg" 
+          state={pageInfo.nightMode} onClick={(e) => {
+              ws.sendJSON({
+                  type: 0x1,
+                  data: {
+                      channel: "Main",
+                      action: "toggleOption",
+                      option: "nightMode"
+                  }
+              })
+          }} 
+          title="Modo noturno">
+        </BoxSwitch>
+        <BoxSwitch 
+          src="/thermometer-half-solid.svg" 
+          state={pageInfo.autoTempCtrl} onClick={(e) => {
+              ws.sendJSON({
+                  type: 0x1,
+                  data: {
+                      channel: "TempMonitor",
+                      action: "toggleOption",
+                      option: "autoTempCtrl"
+                  }
+              })
+          }} 
+          title="Controle automático de temperatura">
+        </BoxSwitch>
+        <BoxSwitch 
+          src="/wind-solid.svg" 
+          state={pageInfo.airFlow} onClick={(e) => {
+              ws.sendJSON({
+                  type: 0x1,
+                  data: {
+                      channel: "TempMonitor",
+                      action: "toggleOption",
+                      option: "airFlow"
+                  }
+              })
+          }} 
+          title="Ativar ventilação">
+        </BoxSwitch>
       </Box>
 
       <Box name="Camera interna" displayType="flex">
@@ -58,4 +113,15 @@ export default function Home() {
       </Box>
     </div>
   )
+}
+
+export const getStaticProps = async (ctx) => {
+  let data = await fetch('http://localhost:1108/api/main_info');
+  const jsondata: Props = await data.json();
+
+  console.log(jsondata);
+
+  return {
+    props: jsondata?.mainInfo
+  }
 }

@@ -1,5 +1,10 @@
 @use "sass:selector";
 
+.contentDisabled {
+    filter: brightness(0.8);
+    pointer-events: none;
+}
+
 .editBox {
     width: 80%;
     height: auto;
@@ -186,6 +191,49 @@
         width: 100%;
 
         background-color: var(--red-200);
+    }
+
+    .box {
+        width: 100%;
+        display: flex;
+        padding: 0.5rem;
+        border-radius: 0.3rem;
+        background-color: var(--red-100);
+        gap: 1rem;
+
+        .value {
+            width: 40%;
+            border-radius: 0.3rem;
+            border: 0;
+            background-color: var(--red-200);
+            box-shadow: inset 0px 4px 4px rgb(0 0 0 / 25%);
+            display: flex;
+            align-items: center;
+
+            * {
+                color: #fff;
+                font-family: Lexend, sans-serif;
+                font-size: 1.2rem;
+            }
+
+            input {
+                border: 0;
+                width: 70%;
+                height: 100%;
+                outline: none;
+                text-align: center;
+                background-color: transparent;
+            }
+        }
+
+        button {
+            transition: background-color 0.2s, top 0.2s, box-shadow 0.2s;
+            background-color: var(--red-50) !important;
+
+            &:active {
+                background-color: var(--red-150) !important;
+            }
+        }
     }
 
     .timeList {

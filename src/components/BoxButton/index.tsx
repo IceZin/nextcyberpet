@@ -9,6 +9,7 @@ export function BoxButton(props) {
         }} className={styles.boxButton}>
             <img src={props.src} alt=""/>
             <h3>{props.title}</h3>
+            {props.children}
         </button>
     )
 }

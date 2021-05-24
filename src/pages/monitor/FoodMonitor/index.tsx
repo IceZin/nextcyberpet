@@ -6,6 +6,8 @@ import { TimeBox } from '../../../components/TimeBox'
 import { WsContext } from '../../../contexts/WsContext'
 import styles from './styles.module.scss'
 
+const channel = "FoodMonitor";
+
 type Box = {
     state: boolean
     info: {
@@ -20,6 +22,7 @@ type BoxObject = {
 
 type MonitorProps = {
     boxes: BoxObject
+    pageInfo: PageInfo
 }
 
 type FormInfo = {
@@ -30,17 +33,25 @@ type FormInfo = {
     state: boolean
 }
 
+type PageInfo = {
+    auto: boolean
+    waterFlow: boolean
+}
+
 export function FoodMonitor(props: MonitorProps) {
     let [formInfo, setFormInfo] = useState({} as FormInfo);
+    let [pageInfo, setPageInfo] = useState({} as PageInfo);
     let [timeBoxes, setTimeBoxes] = useState({} as BoxObject)
 
     let {ws} = useContext(WsContext)
 
     let contentRef = useRef<HTMLDivElement>();
     let formRef = useRef<HTMLFormElement>();
+    let manualFoodInput = useRef<HTMLInputElement>();
 
     useEffect(() => {
         setTimeBoxes({...props.boxes});
+        setPageInfo({...props.pageInfo});
     }, [])
 
     useEffect(() => {
@@ -74,9 +85,12 @@ export function FoodMonitor(props: MonitorProps) {
                 tmpArr[packet.params.newTime].info.water = packet.params.water;
 
                 setTimeBoxes(tmpArr);
+            } else if (packet.action == "toggleOption") {
+                setPageInfo({...pageInfo, ...{[packet.option]: packet.state}})
+                console.log(pageInfo)
             }
         })
-    }, [ws, timeBoxes])
+    }, [ws, timeBoxes, pageInfo])
 
     function addTimeBox(packet) {
         let boxInfo: Box = {
@@ -111,6 +125,7 @@ export function FoodMonitor(props: MonitorProps) {
             ws.sendJSON({
                 type: 0x1,
                 data: {
+                    channel,
                     action: formInfo.info.type,
                     params: {
                         time: e.target.time.value,
@@ -126,6 +141,7 @@ export function FoodMonitor(props: MonitorProps) {
             ws.sendJSON({
                 type: 0x1,
                 data: {
+                    channel,
                     action: formInfo.info.type,
                     boxTime: formInfo.info.boxTime,
                     params: {
@@ -148,7 +164,7 @@ export function FoodMonitor(props: MonitorProps) {
 
             timeInput.value = "00:00";
             foodInput.value = "100";
-            waterInput.value = "60";
+            waterInput.value = "1";
         }
 
         setFormInfo({
@@ -192,6 +208,7 @@ export function FoodMonitor(props: MonitorProps) {
                     ws.sendJSON({
                         type: 0x1,
                         data: {
+                            channel,
                             action: "deleteFeedTime",
                             boxTime: formInfo.info.boxTime
                         }
@@ -218,6 +235,7 @@ export function FoodMonitor(props: MonitorProps) {
                         ws.sendJSON({
                             type: 0x1,
                             data: {
+                                channel,
                                 action: "toggleFeedTime",
                                 boxTime
                             }
@@ -242,7 +260,7 @@ export function FoodMonitor(props: MonitorProps) {
     }
 
     return (
-        <>
+        <div>
             <form 
                 className={styles.editBox + ' ' + (formInfo.state ? (styles.visible) : (styles.hidden))} 
                 onSubmit={validateForm}
@@ -266,7 +284,7 @@ export function FoodMonitor(props: MonitorProps) {
                     <div className={styles.config}>
                         <h3>Ração</h3>
                         <div className={styles.value}>
-                            <input type="number" id="food"></input>
+                            <input type="number" id="food" max={500}></input>
                             <span>g</span>
                         </div>
                     </div>
@@ -274,7 +292,7 @@ export function FoodMonitor(props: MonitorProps) {
                     <div className={styles.config}>
                         <h3>Água</h3>
                         <div className={styles.value}>
-                            <input type="number" id="water"></input>
+                            <input type="number" id="water" max={15}></input>
                             <span>min</span>
                         </div>
                     </div>
@@ -285,12 +303,58 @@ export function FoodMonitor(props: MonitorProps) {
 
             <div className={styles.content} ref={contentRef}>
                 <Box name="Alimentação">
-                    <BoxButton src="/bone-solid.svg" state={false} onClick={(e) => console.log(e)} title="Despejar ração"></BoxButton>
-                    <BoxSwitch src="/tint-solid.svg" state={false} onClick={(e) => console.log(e)} title="Fluxo de água"></BoxSwitch>
-                    <BoxSwitch src="/plug-solid.svg" state={false} onClick={(e) => console.log(e)} title="Modo automático"></BoxSwitch>
+                    <div className={styles.box}>
+                        <BoxButton 
+                            src="/bone-solid.svg" 
+                            state={false} onClick={(e) => {
+                                ws.sendJSON({
+                                    type: 0x1,
+                                    data: {
+                                        channel,
+                                        action: "feedPet",
+                                        value: manualFoodInput.current.value
+                                    }
+                                })
+                            }} 
+                            title="Despejar ração"
+                        />
+                        <div className={styles.value}>
+                            <input type="number" ref={manualFoodInput} max={500} defaultValue={100}></input>
+                            <span>g</span>
+                        </div>
+                    </div>
+                    <BoxSwitch 
+                        src="/tint-solid.svg" 
+                        state={pageInfo.waterFlow} onClick={(e) => {
+                            ws.sendJSON({
+                                type: 0x1,
+                                data: {
+                                    channel,
+                                    action: "toggleOption",
+                                    option: "waterFlow"
+                                }
+                            })
+                        }} 
+                        title="Fluxo de água">
+
+                    </BoxSwitch>
+                    <BoxSwitch 
+                        src="/plug-solid.svg" 
+                        state={pageInfo.auto} onClick={(e) => {
+                            ws.sendJSON({
+                                type: 0x1,
+                                data: {
+                                    channel,
+                                    action: "toggleOption",
+                                    option: "auto"
+                                }
+                            })
+                        }} 
+                        title="Modo automático">
+                    </BoxSwitch>
                 </Box>
 
-                <div className={styles.timeList}>
+                <div className={styles.timeList  + ' ' + (pageInfo.auto ? "" : styles.contentDisabled)} >
                     <header>
                         <h3>Horários</h3>
                         <button onClick={() => {
@@ -310,6 +374,6 @@ export function FoodMonitor(props: MonitorProps) {
                     </div>
                 </div>
             </div>
-        </>
+        </div>
     )
 }

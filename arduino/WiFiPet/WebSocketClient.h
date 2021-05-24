@@ -15,8 +15,10 @@ class WebSocketClient {
     void connect();
     void update();
     void scan();
+    void writePic(byte buf[], int len);
     void sendBuff(byte buf[], int len);
     void registerEvent(String type, void (*event)(int*, int));
+    void registerOnConnect(String type, void (*event)());
 
     class LedControl *strip;
   private:
@@ -27,8 +29,9 @@ class WebSocketClient {
     long awaitTime = 0;
     long lastAction = 0;
     
-    bool awaitingUpgrade = true;
+    bool awaitingUpgrade = true; 
     bool upgrading = false;
+    bool uploadInProgress = false;
     
     void connectToWs();
     void readWs();
@@ -37,6 +40,7 @@ class WebSocketClient {
     void sendPong();
 
     void (*onData)(int*, int);
+    void (*onConnect)();
 
     double **phases;
     int p_len = 0;
