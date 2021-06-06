@@ -5,12 +5,12 @@ LedControl::LedControl() {
 }
 
 void LedControl::setupLeds() {
-  pinMode(22, OUTPUT);
-  pinMode(34, INPUT);
+  pinMode(15, OUTPUT);
+  pinMode(33, INPUT);
 
   analogReadResolution(10);
   
-  FastLED.addLeds<WS2812, 22, RBG>(strip, leds);
+  FastLED.addLeds<WS2812, 15, RBG>(strip, leds);
   FastLED.clear();
   FastLED.show();
 
@@ -25,6 +25,8 @@ void LedControl::clear() {
 void LedControl::start() {
   if (!state) {
     state = true;
+
+    if (mode == SOLID) showSolidColor();
   }
 }
 
@@ -48,14 +50,43 @@ void LedControl::clearHeapMem() {
 }
 
 void LedControl::update() {
-  if (millis() - lastUpdate >= update_delay) {
-    if (state) {
-      if (mode == SHIFT_LEFT) shiftToLeft();
-      else if (mode == SHIFT_RIGHT) shiftToRight();
-      else if (mode == SPECTRUM) spectrum();
+  if (blinkLed) {
+    if (millis() - blinkTime >= blinkInterval and not blinking) {
+      blinkCount++;
+
+      if (blinkCount > blinkAmount) {
+        blinkTime = 0;
+        blinkCount = 0;
+        blinkLed = false;
+
+        Serial.println("[*] Stopped Blinking");
+      } else {
+        fill_solid(strip, leds, CRGB(blinkColor[0], blinkColor[1], blinkColor[2]));
+        FastLED.show();
+        
+        blinkTime = millis();
+        blinking = true;
+      }
     }
 
-    if (update_delay > 0) lastUpdate = millis();
+    if (millis() - blinkTime >= blinkDelay and blinking) {
+      FastLED.clear();
+      FastLED.show();
+
+      blinking = false;
+      blinkTime = millis();
+    }
+  } else {
+    if (millis() - lastUpdate >= update_delay) {
+      if (state) {
+        if (mode == BREATH) breath();
+        else if (mode == SHIFT_LEFT) shiftToLeft();
+        else if (mode == SHIFT_RIGHT) shiftToRight();
+        else if (mode == SPECTRUM) spectrum();
+      }
+  
+      if (update_delay > 0) lastUpdate = millis();
+    }
   }
 }
 
@@ -72,7 +103,7 @@ void LedControl::showSolidColor() {
 void LedControl::setColor(int* rgb) {
   for (int i = 0; i < 3; i++) strip_color[i] = rgb[i];
 
-  if (mode == 0x1) showSolidColor();
+  if (mode == 0x1 and state) showSolidColor();
 }
 
 void LedControl::setColorType(int type) {
@@ -85,6 +116,44 @@ void LedControl::setLen(int len) {
 
 void LedControl::setDelay(int ms) {
   update_delay = ms;
+}
+
+void LedControl::blink(int* rgb, int am, int duration, int interval) {
+  if (blinkLed) return;
+  
+  Serial.println("[*] Blinking");
+  
+  for (int i = 0; i < 3; i++) blinkColor[i] = rgb[i];
+
+  blinkAmount = am;
+  blinkDelay = duration;
+  blinkInterval = interval;
+  blinkLed = true;
+}
+
+void LedControl::breath() {
+  if (breathDescend) {
+    breathIntensity -= 1;
+
+    if (breathIntensity == 0) {
+      breathDescend = false;
+    }
+  } else {
+    breathIntensity += 1;
+
+    if (breathIntensity == 100) {
+      breathDescend = true;
+    }
+  }
+
+  fill_solid(strip, leds, CRGB(
+      round(strip_color[0] * ((float)breathIntensity / 100)),
+      round(strip_color[1] * ((float)breathIntensity / 100)),
+      round(strip_color[2] * ((float)breathIntensity / 100))
+    )
+  );
+
+  FastLED.show();
 }
 
 void LedControl::trail() {
@@ -137,8 +206,9 @@ void LedControl::setSpectrumInfo(int intensity, int decay, int cutoff, int mxint
   if (mxintensity == 0) {
     if (!autoMode) {
       autoMode = true;
-      maxVal = 0;
     }
+
+    maxVal = 0;
   } else {
     autoMode = false;
     maxVal = mxintensity;
@@ -153,7 +223,7 @@ void LedControl::spectrum() {
     maxVal = rval;
   }
 
-  if (autoMode and millis() - lastAutoUpdate >= 500) {
+  /*if (autoMode and millis() - lastAutoUpdate >= 500) {
     int tmp = maxVal;
     byte buf[7] = {0x1, 0x0};
     
@@ -172,7 +242,7 @@ void LedControl::spectrum() {
     ws->sendBuff(buf, 7); 
 
     lastAutoUpdate = millis();
-  }
+  }*/
   
   if (rval - lval > 10) {
     lval = rval;
@@ -194,7 +264,7 @@ void LedControl::spectrum() {
     else intensity = (float)lval / (float)maxVal;
   }
 
-  /*Serial.print("maxVal:");
+  Serial.print("maxVal:");
   Serial.print(maxVal);
   Serial.print(", ");
   Serial.print("signalVal:");
@@ -204,7 +274,7 @@ void LedControl::spectrum() {
   Serial.print(lval);
   Serial.print(", ");
   Serial.print("Intensity:");
-  Serial.println(intensity * 100);*/
+  Serial.println(intensity * 100);
 
   if (intensity > 1.0) intensity = 1.0;
 
@@ -217,7 +287,7 @@ int LedControl::sample() {
   int smin = 1023;
   
   for (int i = 0; i < 200; i++) {
-    int rval = analogRead(34);
+    int rval = analogRead(33);
     
     if (rval > smax) smax = rval;
     if (rval < smin) smin = rval;

@@ -1,8 +1,21 @@
 #include "FeedTimeManager.h"
 
-FeedTimeManager::FeedTimeManager(int waterPin, int feederPin) {
-  waterPin = waterPin;
-  feederPin = feederPin;
+FeedTimeManager::FeedTimeManager(int wPin, int fPin) {
+  waterPin = wPin;
+  feederPin = fPin;
+
+  pinMode(waterPin, OUTPUT);
+  pinMode(feederPin, OUTPUT);
+}
+
+void FeedTimeManager::registerSecChange(void (*event)(int)) {
+  onSecChange = *event;
+}
+void FeedTimeManager::registerMinChange(void (*event)(int)) {
+  onMinChange = *event;
+}
+void FeedTimeManager::registerHourChange(void (*event)(int)) {
+  onHourChange = *event;
 }
 
 void FeedTimeManager::syncTime(int hour, int minute, int seconds) {
@@ -14,13 +27,15 @@ void FeedTimeManager::syncTime(int hour, int minute, int seconds) {
   synced = true;
 }
 
+void FeedTimeManager::getTime(int* arr) {
+  arr[0] = syncedHour;
+  arr[1] = syncedMin;
+}
+
 void FeedTimeManager::setOption(String option, bool state) {
   if (option == "waterFlow") {
     waterFlow = state;
     lockWaterFlow = state;
-
-    Serial.println("[*] Manually toggling water flow");
-    Serial.println(state);
 
     if (state) digitalWrite(waterPin, HIGH);
     else digitalWrite(waterPin, LOW);
@@ -36,9 +51,6 @@ void FeedTimeManager::setTimeState(int hour, int minute, bool state) {
       break;
 
   if (i < timesLen) {
-    Serial.println("[*] Toggling time state");
-    Serial.println(state);
-    
     feedTimesState[i] = state;
   }
 }
@@ -86,8 +98,6 @@ void FeedTimeManager::editTime(int oldH, int oldM, int newH, int newM, int FA, i
 
     foodAmounts[i] = FA;
     waterDuration[i] = WFT * 60000;
-
-    Serial.println("[*] Time edited");
   }
 }
 
@@ -108,12 +118,11 @@ void FeedTimeManager::update() {
         syncedHour++;
   
         if (syncedHour == 24) syncedHour = 0;
+
+        //onHourChange(syncedHour);
       }
 
-      Serial.print("Time now: ");
-      Serial.print(syncedHour);
-      Serial.print(":");
-      Serial.println(syncedMin);
+      onMinChange(syncedMin);
 
       for (int i = 0; i < timesLen; i++) {
         if (syncedHour == feedTimes[i][0] and syncedMin == feedTimes[i][1] and feedTimesState[i]) {
@@ -125,34 +134,32 @@ void FeedTimeManager::update() {
           if (!waterFlow and !lockWaterFlow) {
             waterFlow = true;
             digitalWrite(waterPin, HIGH);
+
+            Serial.println("Water Flow Activated");
           }
 
           feedingStartTime = millis();
           
           activeTime = i;
   
-          Serial.println("[*] Started water flow and feeding");
-  
           break;
         }
       }
     }
+
+    //onSecChange(syncedSec);
   }
 
   if (waterFlow and !lockWaterFlow) {
     if (millis() - feedingStartTime >= waterDuration[activeTime]) {
       waterFlow = false;
       digitalWrite(waterPin, LOW);
-
-      Serial.println("[*] Water flow stopped");
     }
   }
 
   if (feeding) {
     if (millis() - feedingStartTime >= feedingDuration) {
       feeding = false;
-
-      Serial.println("[*] Feeding ended");
     }
   }
 }

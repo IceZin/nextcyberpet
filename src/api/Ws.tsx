@@ -29,9 +29,8 @@ export class Ws {
                     type: 0x0
                 })
             } else {
-                Object.values(this.events).forEach(win => {
-                    if (win.data != undefined) win.data(data.data);
-                });
+                if (this.events[data.channel]?.data != null)
+                    this.events[data.channel]?.data(data.data);
             }
         }
     }

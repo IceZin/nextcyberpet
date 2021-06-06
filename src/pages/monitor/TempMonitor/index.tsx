@@ -11,10 +11,15 @@ type MonitorProps = {
     pageInfo: PageInfo
 }
 
+type ChartData = {
+    time: Array<number>
+    temp: number
+}
+
 type PageInfo = {
-    auto: boolean
+    autoTempCtrl: boolean
     airFlow: boolean
-    chartData: Object
+    chartData: Array<ChartData>
 }
 
 export function TempMonitor(props: MonitorProps) {
@@ -84,6 +89,17 @@ export function TempMonitor(props: MonitorProps) {
     }, [])
 
     useEffect(() => {
+        if (chart != undefined) {
+            props.pageInfo.chartData.forEach(data => {
+                chart.data.labels.push(`${data.time[0]}:${data.time[1]}`);
+                chart.data.datasets[0].data.push(data.temp);
+            })
+
+            updateChart();
+        }
+    }, [chart])
+
+    useEffect(() => {
         if (ws == undefined) return;
 
         ws.on("TempMonitor", "data", (packet) => {
@@ -95,15 +111,20 @@ export function TempMonitor(props: MonitorProps) {
                     dataset.data.shift();
                 }
 
-                chart.data.labels.push(packet.params.time);
-                dataset.data.push(packet.params.lightLevel);
+                console.log(packet);
+
+                chart.data.labels.push(packet.time);
+                dataset.data.push(packet.value);
 
                 updateChart();
             } else if (packet.action == "toggleOption") {
                 setPageInfo({...pageInfo, ...{[packet.option]: packet.state}})
-                console.log(pageInfo)
             }
         })
+
+        return () => {
+            ws.on("TempMonitor", "data", null);
+        }
     }, [ws, pageInfo, chart])
 
     return (
@@ -125,13 +146,13 @@ export function TempMonitor(props: MonitorProps) {
                 </BoxSwitch>
                 <BoxSwitch 
                     src="/plug-solid.svg" 
-                    state={pageInfo.auto} onClick={(e) => {
+                    state={pageInfo.autoTempCtrl} onClick={(e) => {
                         ws.sendJSON({
                             type: 0x1,
                             data: {
                                 channel: "TempMonitor",
                                 action: "toggleOption",
-                                option: "auto"
+                                option: "autoTempCtrl"
                             }
                         })
                     }} 

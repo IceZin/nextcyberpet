@@ -8,6 +8,7 @@ class FeedTimeManager {
     FeedTimeManager(int waterPin, int feederPin);
 
     void syncTime(int hour, int minute, int seconds);
+    void getTime(int* arr);
     void addTime(int hour, int minute, int foodAmount, int waterFlowTime, bool state);
     void removeTime(int hour, int minute);
     void editTime(int oldH, int oldM, int newH, int newM, int FA, int WFT);
@@ -15,6 +16,10 @@ class FeedTimeManager {
     void setOption(String option, bool state);
     void update();
     void reset();
+
+    void registerSecChange(void (*event)(int));
+    void registerMinChange(void (*event)(int));
+    void registerHourChange(void (*event)(int));
   private:
     int waterPin;
     int feederPin;
@@ -40,6 +45,10 @@ class FeedTimeManager {
     bool waterFlow = false;
     bool lockWaterFlow = false;
     bool feeding = false;
+
+    void (*onSecChange)(int);
+    void (*onMinChange)(int);
+    void (*onHourChange)(int);
 };
 
 #endif

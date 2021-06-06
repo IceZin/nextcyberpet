@@ -6,19 +6,19 @@
 #include <WiFiClientSecure.h>
 #include <WiFiClient.h>
 
-#define CAMERA_MODEL_AI_THINKER
-
 WiFiClient client;
 WebSocketClient webclient("/", "192.168.0.10", "ESP32", "esp32");
 LedControl led_manager;
-FeedTimeManager feedTimeManager(7, 8);
+FeedTimeManager timeManager(4, 25);
 
 bool updateCameraImg = true;
+
 long lastCameraPic = 0;
+long lastTempRegister = 0;
 long bpsUpdate = 0;
 long bytesSent = 0;
 
-const double beta = 3600.0;
+const double beta = 3950.0;
 const double r0 = 10000.0;
 const double t0 = 273.0 + 25.0;
 const double rx = r0 * exp(-beta/t0);
@@ -28,24 +28,28 @@ const double R = 10000.0;
 
 const int samples = 5;
 
-/*static camera_config_t camera_config = {
+int red[3] = {255, 0, 0};
+int green[3] = {0, 30, 0};
+int blue[3] = {0, 0, 255};
+
+static camera_config_t camera_config = {
     .pin_pwdn = -1,
     .pin_reset = -1,
-    .pin_xclk = 22,
-    .pin_sscb_sda = 18,
+    .pin_xclk = 14,
+    .pin_sscb_sda = 13,
     .pin_sscb_scl = 5,
 
-    .pin_d7 = 34,
-    .pin_d6 = 35,
-    .pin_d5 = 32,
-    .pin_d4 = 33,
-    .pin_d3 = 25,
-    .pin_d2 = 26,
-    .pin_d1 = 27,
-    .pin_d0 = 14,
-    .pin_vsync = 19,
-    .pin_href = 21,
-    .pin_pclk = 23,
+    .pin_d7 = 21,
+    .pin_d6 = 27,
+    .pin_d5 = 22,
+    .pin_d4 = 35,
+    .pin_d3 = 23,
+    .pin_d2 = 34,
+    .pin_d1 = 26,
+    .pin_d0 = 39,
+    .pin_vsync = 18,
+    .pin_href = 12,
+    .pin_pclk = 19,
 
     //XCLK 20MHz or 10MHz for OV2640 double FPS (Experimental)
     .xclk_freq_hz = 20000000,
@@ -57,9 +61,9 @@ const int samples = 5;
 
     .jpeg_quality = 0, //0-63 lower number means higher quality
     .fb_count = 1       //if more than one, i2s runs in continuous mode. Use only with JPEG
-};*/
+};
 
-/*static esp_err_t init_camera()
+static esp_err_t init_camera()
 {
     //initialize the camera
     esp_err_t err = esp_camera_init(&camera_config);
@@ -71,42 +75,52 @@ const int samples = 5;
     }
 
     return ESP_OK;
-}*/
+}
 
 void setup() {
   analogReadResolution(10);
+  pinMode(32, INPUT);
   pinMode(36, INPUT);
+  pinMode(2, OUTPUT);
   
   Serial.begin(921600);
 
   led_manager.setupLeds();
-  led_manager.mode = 0x00;
+  led_manager.mode = 0x01;
+  led_manager.update_delay = 10;
   led_manager.ws = &webclient;
 
   webclient.strip = &led_manager;
   webclient.connectToWifi();
 
-  //webclient.registerEvent("data", onData);
-  webclient.registerOnConnect("connect", wsOnConnect);
+  webclient.registerEvent("data", onData);
+  webclient.registerOnConnect(wsOnConnect);
+  webclient.registerOnDisconnect(wsOnDisconnect);
+
+  timeManager.registerMinChange(onMinUpdate);
 
   Serial.println("[*] ESP32 STARTED");
 
+  led_manager.start();
+  led_manager.setColor(red);
+
   //init_camera();
 }
-
+ 
 void loop() {
-  /*webclient.update();
+  webclient.update();
 
   led_manager.update();
-  feedTimeManager.update();
+  timeManager.update();
 
-  if (updateCameraImg and millis() - lastCameraPic >= 1000 / 10) {
+  /*if (updateCameraImg and millis() - lastCameraPic >= 1000) {
     camera_fb_t *pic = esp_camera_fb_get();
+    const char *data = (const char *)pic->buf;
 
     Serial.println("[*] Sending pic");
     long uplStart = millis();
     
-    webclient.writePic(pic->buf, pic->len);
+    webclient.writePic(data, pic->len);
 
     Serial.println("[*] Sent");
     Serial.print("[*] Upload took ");
@@ -115,23 +129,54 @@ void loop() {
 
     lastCameraPic = millis();
   }*/
+}
 
-  int val = 0;
+void sendTempData() {
+  float average = 0;
   for (int i = 0; i < samples; i++) {
-    val += analogRead(36);
+    average += analogRead(32);
   }
- 
-  double v = (vcc*val)/(samples*1024.0);
-  double rt = (vcc*R)/v - R;
- 
-  double t = beta / log(rt/rx);
-  Serial.println (t-273.0);
+
+  average /= samples;
+  average = 1023 / average - 1;
+  average = 10000 / average;
+
+  float temperature = (1.0 / (25 + 273.15)) + (1.0 / 3950.0) * log(average / 10000.0);
+  temperature = 1.0 / temperature;
+  temperature -= 273.15;
   
-  delay(100);
+  int syncedTime[2];
+  timeManager.getTime(syncedTime);
+
+  byte buf[] = {0x1, 0x2, 0x0, syncedTime[0], syncedTime[1],
+  floor(temperature), (int)((temperature - floor(temperature)) * 10L)};
+  
+  webclient.sendBuff(buf, sizeof(buf));
+}
+
+void onMinUpdate(int min) {
+  Serial.println("Minute changed");
+  sendTempData();
 }
 
 void wsOnConnect() {
-  feedTimeManager.reset();
+  timeManager.reset();
+
+  led_manager.blink(green, 2, 300, 100);
+
+  digitalWrite(2, HIGH);
+  
+  led_manager.mode = 0x02;
+  led_manager.setColor(green);
+}
+
+void wsOnDisconnect() {
+  //led_manager.blink(red, 2, 300, 100);
+
+  digitalWrite(2, LOW);
+  
+  led_manager.mode = 0x01;
+  led_manager.setColor(red);
 }
 
 //Dados que vem do aplicativo
@@ -145,6 +190,8 @@ void wsOnConnect() {
 //  |_ [0] 0x0
 //  |   |_ [1] 0x0 - Info de nivel de luz
 //  |   |_ [1] 0x1 - Info de temperatura
+//  |   |_ [1] 0x2 - Setar cor
+//  |   |_ [1] 0x3 - Ativar/Desativar iluminação
 //  |_ [0] 0x1
 //  |   |_ [1] 0x0 - Adicionar um novo Tempo
 //  |   |_ [1] 0x1 - Remover um tempo
@@ -156,14 +203,42 @@ void wsOnConnect() {
 
 // [2:x] - Parametros
 void onData(int* data, int dataLen) {
-  for (int i = 0; i < dataLen; i++) {
+  /*for (int i = 0; i < dataLen; i++) {
     Serial.print("Packet index ");
     Serial.print(i);
     Serial.print(" - ");
     Serial.println(data[i]);
-  }
+  }*/
 
-  if (data[0] == 0x1) {
+  if (data[0] == 0x0) {
+    if (data[1] == 0x2) {
+      int rgb[3] = {data[2], data[3], data[4]};
+
+      led_manager.setColor(rgb);
+    } else if (data[1] == 0x3) {
+      int state = data[2];
+
+      if (state) {
+        led_manager.start();
+      } else {
+        led_manager.stop();
+        led_manager.clear();
+      }
+    } else if (data[1] == 0x4) {
+      if (data[2]) {
+        led_manager.mode = 0x5;
+      } else {
+        led_manager.mode = 0x1;
+        led_manager.showSolidColor();
+      }
+    } else if (data[1] == 0x5) {
+      if (data[2]) {
+        led_manager.setSpectrumInfo(1, 30, 10, 0, 0);
+      } else {
+        led_manager.setSpectrumInfo(1, 30, 150, 0, 0);
+      }
+    }
+  } else if (data[0] == 0x1) {
     if (data[1] == 0x0) {
       int hour = data[2];
       int minutes = data[3];
@@ -179,22 +254,12 @@ void onData(int* data, int dataLen) {
       bool state = false;
       if (stateHex != 0) state = true;
 
-      feedTimeManager.addTime(hour, minutes, foodAmount, waterFlowTime, state);
-
-      Serial.println("[*] New time added");
-      Serial.print(hour);
-      Serial.print(':');
-      Serial.println(minutes);
+      timeManager.addTime(hour, minutes, foodAmount, waterFlowTime, state);
     } else if (data[1] == 0x1) {
       int hour = data[2];
       int minutes = data[3];
 
-      feedTimeManager.removeTime(hour, minutes);
-
-      Serial.println("[*] Time removed");
-      Serial.print(hour);
-      Serial.print(':');
-      Serial.println(minutes);
+      timeManager.removeTime(hour, minutes);
     } else if (data[1] == 0x2) {
       int oldH = data[2];
       int oldM = data[3];
@@ -208,25 +273,25 @@ void onData(int* data, int dataLen) {
         foodAmount += data[8 + i];
       }
       
-      feedTimeManager.editTime(oldH, oldM, newH, newM, foodAmount, WFT);
+      timeManager.editTime(oldH, oldM, newH, newM, foodAmount, WFT);
     } else if (data[1] == 0x3) {
-      feedTimeManager.syncTime(data[2], data[3], data[4]);
+      timeManager.syncTime(data[2], data[3], data[4]);
     } else if (data[1] == 0x4) {
       if (data[2] == 0x0) {
         bool state = false;
         if (data[3] != 0) state = true;
         
-        feedTimeManager.setOption("waterFlow", state); 
+        timeManager.setOption("waterFlow", state); 
       } else if (data[2] == 0x1) {
         bool state = false;
         if (data[3] != 0) state = true;
         
-        feedTimeManager.setOption("auto", state); 
+        timeManager.setOption("auto", state); 
       } else if (data[2] == 0x2) {
         bool state = false;
         if (data[5] != 0) state = true;
         
-        feedTimeManager.setTimeState(data[3], data[4], state); 
+        timeManager.setTimeState(data[3], data[4], state); 
       }
     }
   } else if (data[0] == 0x2) {

@@ -90,6 +90,10 @@ export function FoodMonitor(props: MonitorProps) {
                 console.log(pageInfo)
             }
         })
+
+        return () => {
+            ws.on("FeedMonitor", "data", null);
+        }
     }, [ws, timeBoxes, pageInfo])
 
     function addTimeBox(packet) {

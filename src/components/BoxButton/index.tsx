@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 export function BoxButton(props) {
     return (
         <button onClick={() => {
-            props.onClick(props.id);
+            props.onClick();
         }} className={styles.boxButton}>
             <img src={props.src} alt=""/>
             <h3>{props.title}</h3>

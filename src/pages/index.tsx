@@ -38,6 +38,10 @@ export default function Home(props: PageInfo) {
         console.log(pageInfo);
       }
     })
+
+    return () => {
+      ws.on("Main", "data", null);
+    }
   }, [ws, pageInfo])
 
   function shortcutClick(btn: string) {

@@ -52,10 +52,11 @@ export function CameraMonitor(props: MonitorProps) {
                     pixels.push([]);
 
                     for (let w = 0; w < 160; w++) {
-                        let i = (h * 160) + w;
-                        let r = packet.camImg.data[i];
-                        let g = packet.camImg.data[1 + i];
-                        let b = packet.camImg.data[2 + i];
+                        let i = ((h * 160) + w) * 2;
+                        let c = packet.camImg.data[i] + (packet.camImg.data[i+1]<<8);
+                        let r = ((c & 0xF800) >> 11) << 3;
+                        let g = ((c & 0x7E0) >> 5) << 2;
+                        let b = ((c & 0x1F)) << 3;
                         pixels[h].push([r, g, b])
                     }
                 }
@@ -83,6 +84,10 @@ export function CameraMonitor(props: MonitorProps) {
                 ctx.putImageData(imgData, 0, 0);
             }
         })
+
+        return () => {
+            ws.on("CameraMonitor", "data", null);
+        }
     }, [ws, pageInfo])
 
     return (

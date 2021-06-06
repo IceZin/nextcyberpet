@@ -4,7 +4,7 @@ const next = require('next')
 const fs = require('fs');
 const WebSocket = require('ws');
 const WsManager = require('./components/WsManager.js');
-const SockManager = require('./components/DevSockManager.js');
+const SockManager = require('./components/SockManager.js');
 const tm = require('./components/TimeManager.js');
 const ChannelsManager = require('./components/Channels.js');
 const ComplexObject = require('./components/ComplexObject.js')
@@ -33,12 +33,14 @@ const feedInfo = Channels.newChannel("FoodMonitor", {
 const lightInfo = Channels.newChannel("LightMonitor", {
     auto: false,
     light: false,
+    spectrum: false,
+    mobileAudio: false,
     chartData: {}
 });
 const tempInfo = Channels.newChannel("TempMonitor", {
-    auto: false,
+    autoTempCtrl: false,
     airFlow: false,
-    chartData: {}
+    chartData: []
 });
 const camInfo = Channels.newChannel("CameraMonitor", {
     showOnMenu: false
@@ -49,6 +51,8 @@ console.log(feedInfo);
 // [---] Broadcast to Clients [---]
 
 function broadcast(data) {
+    console.log(`Broadcasting data to ${data.channel} | ${data.data.option}`)
+
     Object.values(wsClients).forEach(client => {
         client.sendJSON(data);
     })
@@ -188,21 +192,54 @@ Channels.registerCallback("FoodMonitor", (data) => {
 
 // [---] Light Monitor Channel [---]
 
+lightInfo.registerUpdateCallback((option) => {
+    if (option == "light") {
+        client.sendBuffer(Buffer.from(
+            [0x1, 0x3, 0x0, 0x3, lightInfo.getOption(option)]
+        ))
+    } else if (option == "spectrum") {
+        client.sendBuffer(Buffer.from(
+            [0x1, 0x3, 0x0, 0x4, lightInfo.getOption(option)]
+        ))
+    } else if (option == "mobileAudio") {
+        client.sendBuffer(Buffer.from(
+            [0x1, 0x3, 0x0, 0x5, lightInfo.getOption(option)]
+        ))
+    }
+
+    broadcast({
+        type: 0x1,
+        channel: "LightMonitor",
+        data: {
+            action: "toggleOption",
+            option: option,
+            state: lightInfo.getOption(option)
+        }
+    })
+})
+
 const lightMonitorHandler = {
     "toggleOption": (data) => {
-        if (lightInfo[data.option] != null) {
-            lightInfo[data.option] = !lightInfo[data.option];
-
-            broadcast({
-                type: 0x1,
-                channel: data.channel,
-                data: {
-                    action: "toggleOption",
-                    option: data.option,
-                    state: lightInfo[data.option]
-                }
-            })
+        if (lightInfo.options[data.option] != null) {
+            lightInfo.setOption(data.option, !lightInfo.options[data.option]);
         }
+    },
+    "setColor": (data) => {
+        let rgb = [];
+        let hex = data.color.replace('#', '');
+        hex = parseInt(hex, 16);
+
+        for (let i = 0; i < 3; i++) {
+            let clr = (hex >> ((2 - i) * 8)) & 255;
+            rgb[i] = clr;
+        }
+
+        console.log("Setting color");
+        console.log(rgb);
+
+        client.sendBuffer(Buffer.from(
+            [0x1, 0x5, 0x0, 0x2, ...rgb]
+        ))
     }
 }
 
@@ -216,6 +253,8 @@ Channels.registerCallback("LightMonitor", (data) => {
 
 // [---] Temperature Monitor Channel [---]
 
+var temperatureInfo = []
+
 var sharedTempVars = {
     airFlow: (state) => {
         mainInfo.airFlow = state;
@@ -226,6 +265,19 @@ var sharedTempVars = {
             data: {
                 action: "toggleOption",
                 option: "airFlow",
+                state
+            }
+        })
+    },
+    autoTempCtrl: (state) => {
+        mainInfo.airFlow = state;
+
+        broadcast({
+            type: 0x1,
+            channel: "Main",
+            data: {
+                action: "toggleOption",
+                option: "autoTempCtrl",
                 state
             }
         })
@@ -288,7 +340,7 @@ Channels.registerCallback("CameraMonitor", (data) => {
 
 var mainRefValsHandler = {
     airFlow: (state) => {
-        temperatureInfo.airFlow = state;
+        tempInfo.options.airFlow = state;
 
         broadcast({
             type: 0x1,
@@ -342,13 +394,13 @@ const dvcFeedManager = {
         data.splice(0, 1);
     },
     0x2: (data) => {
-        data.splice(0, 1);
+        data.slice(0, 1);
     }
 }
 
 const dvcLightManager = {
     0x0: (data) => {
-        data.splice(0, 1);
+        data.slice(0, 1);
 
         /*temperatureInfo.times.push({
             time: 
@@ -359,30 +411,44 @@ const dvcLightManager = {
         })*/
     },
     0x1: (data) => {
-        data.splice(0, 1);
+        data.slice(0, 1);
     },
     0x2: (data) => {
-        data.splice(0, 1);
+        data.slice(0, 1);
     }
 }
 
 const dvcTempManager = {
     0x0: (data) => {
-        data.splice(0, 1);
+        data = data.slice(3, data.length);
 
-        /*temperatureInfo.times.push({
-            time: 
+        console.log("Reached temp");
+        console.log(data);
+
+        if (tempInfo.options.chartData.length == 10) {
+            tempInfo.options.chartData.splice(0, 1);
+        }
+
+        tempInfo.options.chartData.push({
+            time: [data[0], data[1]],
+            temp: data[2] + (data[3] / 10)
         })
 
         broadcast({
-            
-        })*/
+            type: 0x1,
+            channel: "TempMonitor",
+            data: {
+                action: "newTemperatureTime",
+                time: `${data[0]}:${data[1]}`,
+                value: data[2] + (data[3] / 10)
+            }
+        })
     },
     0x1: (data) => {
-        data.splice(0, 1);
+        data.slice(0, 1);
     },
     0x2: (data) => {
-        data.splice(0, 1);
+        data.slice(0, 1);
     }
 }
 
@@ -421,6 +487,19 @@ function syncDevice() {
 
     client.toggleFeedOption(0x0, feedInfo.options.waterFlow);
     client.toggleFeedOption(0x1, feedInfo.options.auto);
+
+    //Set light state
+    client.sendBuffer(Buffer.from(
+        [0x1, 0x3, 0x0, 0x3, lightInfo.getOption("light")]
+    ))
+
+    client.sendBuffer(Buffer.from(
+        [0x1, 0x3, 0x0, 0x4, lightInfo.getOption("spectrum")]
+    ))
+
+    client.sendBuffer(Buffer.from(
+        [0x1, 0x3, 0x0, 0x5, lightInfo.getOption("mobileAudio")]
+    ))
 }
 
 // [---] Upgrade Handler [---]
@@ -550,7 +629,11 @@ const apiPaths = {
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({
-            mainInfo: mainInfo.options
+            mainInfo: {
+                ...mainInfo.options,
+                autoTempCtrl: tempInfo.options.autoTempCtrl,
+                airFlow: tempInfo.options.airFlow
+            }
         }));
     },
     'camera_info': (res, parsedUrl) => {
@@ -581,10 +664,10 @@ const pathsHandler = {
 
 app.prepare().then(() => {
     const httpserver = createServer((req, res) => {
-        /*console.log("[*] New Request");
+        console.log("[*] New Request");
         console.log(req.method);
         console.log(req.url);
-        console.log(req.headers);*/
+        console.log(req.headers);
 
         const parsedUrl = parse(req.url, true);
         let { pathname, query } = parsedUrl;

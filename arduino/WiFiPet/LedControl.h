@@ -21,8 +21,9 @@ class LedControl {
     void setDelay(int ms);
     void clearTemp();
     void clearHeapMem();
+    void blink(int* rgb, int am, int duration, int interval);
 
-    void setSpectrumInfo(int intensity, int spd, int cutoff, int mxintensity, int animType);
+    void setSpectrumInfo(int intensity, int decay, int cutoff, int mxintensity, int animType);
     
     int8_t mode = 0x00;
     int8_t t = 3;
@@ -33,6 +34,7 @@ class LedControl {
 
     class WebSocketClient *ws;
   private:
+    void breath();
     void trail();
     //void fade();
     void spectrum();
@@ -65,15 +67,28 @@ class LedControl {
 
     int clr_type = 0;
     int8_t SOLID = 0x1;
-    int8_t SHIFT_LEFT = 0x2;
-    int8_t SHIFT_RIGHT = 0x3;
-    int8_t SPECTRUM = 0x4;
+    int8_t BREATH = 0x2;
+    int8_t SHIFT_LEFT = 0x3;
+    int8_t SHIFT_RIGHT = 0x4;
+    int8_t SPECTRUM = 0x5;
     
     long info_ms;
     long l_action = 0;
     long l_d = 0;
     long lastAutoUpdate = 0;
     long lastUpdate = 0;
+    
+    int breathIntensity = 0;
+    bool breathDescend = false;
+
+    bool blinkLed = false;
+    bool blinking = false;
+    int blinkCount = 0;
+    int blinkAmount = 2;
+    int blinkDelay = 100;
+    int blinkInterval = 300;
+    int blinkColor[3] = {0, 100, 255};
+    long blinkTime = 0;
     
     CRGB strip[50];
 };

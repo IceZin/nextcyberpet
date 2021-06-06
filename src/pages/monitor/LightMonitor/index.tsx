@@ -7,6 +7,8 @@ import { TimeBox } from '../../../components/TimeBox'
 import { WsContext } from '../../../contexts/WsContext'
 import styles from './styles.module.scss'
 
+const channel = "LightMonitor";
+
 type Box = {
     state: boolean
     info: {
@@ -24,25 +26,22 @@ type MonitorProps = {
     pageInfo: PageInfo
 }
 
-type FormInfo = {
-    info: {
-        type: string
-        boxTime: string
-    },
-    state: boolean
-}
-
 type PageInfo = {
     auto: boolean
     light: boolean
+    spectrum: boolean
+    mobileAudio: boolean
 }
 
 export function LightMonitor(props: MonitorProps) {
+    let [formInfo, setFormInfo] = useState(Boolean);
     let [pageInfo, setPageInfo] = useState({} as PageInfo);
     let [chart, setChart] = useState<Chart>();
 
     let {ws} = useContext(WsContext)
 
+    let contentRef = useRef<HTMLDivElement>();
+    let formRef = useRef<HTMLFormElement>();
     let canvasRef = useRef<HTMLCanvasElement>();
 
     const renderChart = () => {
@@ -106,7 +105,7 @@ export function LightMonitor(props: MonitorProps) {
     useEffect(() => {
         if (ws == undefined) return;
 
-        ws.on("TempMonitor", "data", (packet) => {
+        ws.on("LightMonitor", "data", (packet) => {
             if (packet.action == "newLightTime") {
                 let dataset = chart.data.datasets[0];
 
@@ -124,44 +123,149 @@ export function LightMonitor(props: MonitorProps) {
                 console.log(pageInfo)
             }
         })
+
+        return () => {
+            ws.on("LightMonitor", "data", null);
+        }
     }, [ws, pageInfo, chart])
 
-    return (
-        <div className={styles.content}>
-            <Box name="Controle de Iluminação">
-                <BoxSwitch 
-                    src="/wind-solid.svg" 
-                    state={pageInfo.light} onClick={(e) => {
-                        ws.sendJSON({
-                            type: 0x1,
-                            data: {
-                                channel: "LightMonitor",
-                                action: "toggleOption",
-                                option: "light"
-                            }
-                        })
-                    }}
-                    title="Iluminação">
-                </BoxSwitch>
-                <BoxSwitch 
-                    src="/plug-solid.svg" 
-                    state={pageInfo.auto} onClick={(e) => {
-                        ws.sendJSON({
-                            type: 0x1,
-                            data: {
-                                channel: "LightMonitor",
-                                action: "toggleOption",
-                                option: "auto"
-                            }
-                        })
-                    }} 
-                    title="Controle de nível de iluminação">
-                </BoxSwitch>
-            </Box>
+    function validateForm(e) {
+        e.preventDefault();
 
-            <Box name="Níveis de luz">
-                <canvas ref={canvasRef}></canvas>
-            </Box>
+        if (e.target.color.value == null) {
+            return;
+        }
+
+        ws.sendJSON({
+            type: 0x1,
+            data: {
+                channel: "LightMonitor",
+                action: "setColor",
+                color: e.target.color.value
+            }
+        })
+
+        let notify = e.target.querySelector("#notify");
+
+        notify.style.width = "11rem";
+
+        setTimeout(() => {
+            notify.style.width = "0rem";
+        }, 1000)
+    }
+
+    function showForm() {
+        setFormInfo(true);
+
+        contentRef.current.style.filter = "brightness(0.6)";
+    }
+
+    function hideForm() {
+        setFormInfo(false);
+
+        contentRef.current.style.filter = "";
+    }
+
+    return (
+        <div>
+            <form 
+                className={styles.editBox + ' ' + (formInfo ? (styles.visible) : (styles.hidden))} 
+                onSubmit={validateForm}
+                ref={formRef}
+            >
+                <div className={styles.notification} id="notify">
+                    <img src="/check-solid.svg" alt=""/>
+                    <h3>Cor aplicada</h3>
+                </div>
+
+                <header>
+                    <h3>Cor da iluminação</h3>
+
+                    <div className={styles.optionBox}>
+                        <button type="button" onClick={hideForm}><img src="/times-solid.svg" alt=""/></button>
+                        <button type="submit"><img src="/check-solid.svg" alt=""/></button>
+                    </div>
+                </header>
+
+                <div className={styles.editContent}>
+                    <div className={styles.config}>
+                        <h3>Cor</h3>
+                        <input type="color" id="color" className={styles.colorInput}/>
+                    </div>
+                </div>
+            </form>
+
+            <div className={styles.content} ref={contentRef}>
+                <Box name="Controle de Iluminação">
+                    <BoxSwitch 
+                        src="/lightbulb-solid.svg" 
+                        state={pageInfo.light} onClick={(e) => {
+                            ws.sendJSON({
+                                type: 0x1,
+                                data: {
+                                    channel: "LightMonitor",
+                                    action: "toggleOption",
+                                    option: "light"
+                                }
+                            })
+                        }}
+                        title="Iluminação">
+                    </BoxSwitch>
+                    <BoxSwitch 
+                        src="/gift-solid.svg" 
+                        state={pageInfo.spectrum} onClick={(e) => {
+                            ws.sendJSON({
+                                type: 0x1,
+                                data: {
+                                    channel: "LightMonitor",
+                                    action: "toggleOption",
+                                    option: "spectrum"
+                                }
+                            })
+                        }}
+                        title="???">
+                    </BoxSwitch>
+                    <BoxSwitch 
+                        src="/volume-up-solid.svg" 
+                        state={pageInfo.mobileAudio} onClick={(e) => {
+                            ws.sendJSON({
+                                type: 0x1,
+                                data: {
+                                    channel: "LightMonitor",
+                                    action: "toggleOption",
+                                    option: "mobileAudio"
+                                }
+                            })
+                        }}
+                        title="Áudio Mobile">
+                    </BoxSwitch>
+                    <BoxSwitch 
+                        src="/plug-solid.svg" 
+                        state={pageInfo.auto} onClick={(e) => {
+                            ws.sendJSON({
+                                type: 0x1,
+                                data: {
+                                    channel: "LightMonitor",
+                                    action: "toggleOption",
+                                    option: "auto"
+                                }
+                            })
+                        }} 
+                        title="Controle de nível de iluminação">
+                    </BoxSwitch>
+                    <BoxButton
+                        src="/swatchbook-solid.svg" 
+                        onClick={(e) => {
+                            showForm();
+                        }}
+                        title="Cor da Iluminação">
+                    </BoxButton>
+                </Box>
+
+                <Box name="Níveis de luz">
+                    <canvas ref={canvasRef}></canvas>
+                </Box>
+            </div>
         </div>
     )
 }

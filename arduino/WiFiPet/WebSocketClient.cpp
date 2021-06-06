@@ -32,11 +32,6 @@ void WebSocketClient::connectToWifi() {
 
 void WebSocketClient::connectToWs() {
   upgrading = true;
-
-  Serial.println("Sending Handshake to WS Server");
-
-  Serial.println(path);
-  Serial.println(host);
   
   String handshake = "GET " + path + " HTTP/1.1\r\n"
       "Host: " + host + "\r\n"
@@ -48,13 +43,11 @@ void WebSocketClient::connectToWs() {
       "Cookie: dvc_name=" + name + ";dvc_addr=" + addr + "\r\n"
       "\r\n";
 
-  Serial.println(handshake);
-
   client->println(handshake.c_str());
   awaitTime = millis();
 }
 
-void WebSocketClient::writePic(byte buf[], int len) {
+void WebSocketClient::writePic(const char *buf, int len) {
   if (!client->connected() or uploadInProgress) return;
 
   /*for (int i = 0; i < len; i++) {
@@ -98,8 +91,6 @@ void WebSocketClient::readWs() {
           upgrading = false;
           lastAction = millis();
 
-          Serial.println("Connected to WS Server");
-
           onConnect();
         }
         
@@ -109,7 +100,6 @@ void WebSocketClient::readWs() {
       }
 
       if (i == 128) {
-        Serial.println(tmpData);
         memset(tmpData, 0, sizeof(tmpData));
         return;
       }
@@ -123,8 +113,6 @@ void WebSocketClient::readWs() {
 
 void WebSocketClient::decodeData() {
   int TYPE = client->read();
-  Serial.print("TYPE: ");
-  Serial.println(TYPE);
 
   if (TYPE == 0x0) {
     lastAction = millis();
@@ -133,7 +121,6 @@ void WebSocketClient::decodeData() {
     clearBuffer();
   } else if (TYPE == 0x1) {
     int LEN = client->read();
-    Serial.println(LEN);
     int data[LEN];
 
     for (byte i = 0; i < LEN; i++) data[i] = client->read();
@@ -148,8 +135,12 @@ void  WebSocketClient::registerEvent(String type, void (*event)(int*, int)) {
   }
 }
 
-void  WebSocketClient::registerOnConnect(String type, void (*event)()) {
+void  WebSocketClient::registerOnConnect(void (*event)()) {
    onConnect = *event;
+}
+
+void  WebSocketClient::registerOnDisconnect(void (*event)()) {
+   onDisconnect = *event;
 }
 
 void WebSocketClient::clearBuffer() {
@@ -162,14 +153,13 @@ void WebSocketClient::update() {
   if (WiFi.status() != WL_CONNECTED) connectToWifi();
   
   if (!client->connected()) {
-     client->connect(host.c_str(), 1108);
-     client->setNoDelay(1);
-     awaitingUpgrade = true;
+    if (!awaitingUpgrade) onDisconnect();
+    client->connect(host.c_str(), 1108);
+    client->setNoDelay(1);
+    awaitingUpgrade = true;
   }
   
   if (awaitingUpgrade and !upgrading) {
-    Serial.println("[*] Attempting connection with WebServer");
-    Serial.println(client->connected());
     connectToWs();
   }
 

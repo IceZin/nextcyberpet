@@ -10,6 +10,7 @@ class WsManager {
         this.sock = sock;
 
         this.sock.on('data', (data) => {
+            console.log(data);
             if (data[0] == 0x0) this.awaitingPing = false;
             else if (this.events["data"] != undefined) this.events["data"](data);
         });
