@@ -198,6 +198,7 @@ void wsOnDisconnect() {
 //  |   |_ [1] 0x2 - Editar um tempo
 //  |   |_ [1] 0x3 - Sincronizar timer
 //  |   |_ [1] 0x4 - Toogle option
+//  |   |_ [1] 0x5 - Acionar alimentação
 //  |_ [0] 0x2
 //      |_ [1] 0x0 - Toggle Camera
 
@@ -293,6 +294,15 @@ void onData(int* data, int dataLen) {
         
         timeManager.setTimeState(data[3], data[4], state); 
       }
+    } else if (data[1] == 0x5) {
+      int foodBuffLen = data[2];
+      int foodAmount = 0;
+
+      for (int i = 0; i < foodBuffLen; i++) {
+        foodAmount += data[3 + i];
+      }
+      
+      timeManager.enableFeed(foodAmount);
     }
   } else if (data[0] == 0x2) {
     if (data[1] == 0x0) {

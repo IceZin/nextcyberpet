@@ -14,6 +14,7 @@ class FeedTimeManager {
     void editTime(int oldH, int oldM, int newH, int newM, int FA, int WFT);
     void setTimeState(int hour, int minute, bool state);
     void setOption(String option, bool state);
+    void enableFeed(int FA);
     void update();
     void reset();
 

@@ -160,8 +160,19 @@ void FeedTimeManager::update() {
   if (feeding) {
     if (millis() - feedingStartTime >= feedingDuration) {
       feeding = false;
+      digitalWrite(feederPin, LOW);
     }
   }
+}
+
+void FeedTimeManager:enableFeed(int FA) {
+  if (feeding) return;
+
+  feedingDuration = FA * 10;
+  feedingStartTime = millis();
+  feeding = true;
+
+  digitalWrite(feederPin, HIGH);
 }
 
 void FeedTimeManager::reset() {

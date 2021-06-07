@@ -179,6 +179,15 @@ const foodMonitorHandler = {
                 client.toggleFeedOption(0x1, feedInfo.options[data.option]);
             }
         }
+    },
+    "feedPet": (data) => {
+        let foodAmount = data.value;
+        let foodBuff = [];
+        while (foodAmount >= 255) {
+            foodBuff.push(0xff);
+            foodAmount -= 255;
+        }
+        if (foodAmount > 0) foodBuff.push(foodAmount);
     }
 }
 
