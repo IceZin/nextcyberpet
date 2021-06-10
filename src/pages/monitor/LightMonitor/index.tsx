@@ -26,11 +26,17 @@ type MonitorProps = {
     pageInfo: PageInfo
 }
 
+type ChartData = {
+    time: Array<number>
+    lightLevel: number
+}
+
 type PageInfo = {
     auto: boolean
     light: boolean
     spectrum: boolean
     mobileAudio: boolean
+    chartData: Array<ChartData>
 }
 
 export function LightMonitor(props: MonitorProps) {
@@ -103,6 +109,19 @@ export function LightMonitor(props: MonitorProps) {
     }, [])
 
     useEffect(() => {
+        if (chart != undefined) {
+            props.pageInfo.chartData.forEach(data => {
+                chart.data.labels.push(`${data.time[0]}:${data.time[1]}`);
+                chart.data.datasets[0].data.push(data.lightLevel);
+            })
+
+            console.log(props.pageInfo)
+
+            updateChart();
+        }
+    }, [chart])
+
+    useEffect(() => {
         if (ws == undefined) return;
 
         ws.on("LightMonitor", "data", (packet) => {
@@ -114,8 +133,8 @@ export function LightMonitor(props: MonitorProps) {
                     dataset.data.shift();
                 }
 
-                chart.data.labels.push(packet.params.time);
-                dataset.data.push(packet.params.lightLevel);
+                chart.data.labels.push(packet.time);
+                dataset.data.push(packet.lightLevel);
 
                 updateChart();
             } else if (packet.action == "toggleOption") {

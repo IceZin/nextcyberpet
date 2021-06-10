@@ -9,7 +9,7 @@
 WiFiClient client;
 WebSocketClient webclient("/", "192.168.0.10", "ESP32", "esp32");
 LedControl led_manager;
-FeedTimeManager timeManager(4, 25);
+FeedTimeManager timeManager(25, 4);
 
 bool updateCameraImg = true;
 
@@ -17,6 +17,7 @@ long lastCameraPic = 0;
 long lastTempRegister = 0;
 long bpsUpdate = 0;
 long bytesSent = 0;
+int lastGeneralUpdate = 0;
 
 const double beta = 3950.0;
 const double r0 = 10000.0;
@@ -31,6 +32,11 @@ const int samples = 5;
 int red[3] = {255, 0, 0};
 int green[3] = {0, 30, 0};
 int blue[3] = {0, 0, 255};
+
+void generalHandler(int*, int);
+void feedingHandler(int*, int);
+
+void (*handlers[])(int*, int) = {generalHandler, feedingHandler};
 
 static camera_config_t camera_config = {
     .pin_pwdn = -1,
@@ -83,7 +89,7 @@ void setup() {
   pinMode(36, INPUT);
   pinMode(2, OUTPUT);
   
-  Serial.begin(921600);
+  Serial.begin(115200);
 
   led_manager.setupLeds();
   led_manager.mode = 0x01;
@@ -97,6 +103,7 @@ void setup() {
   webclient.registerOnConnect(wsOnConnect);
   webclient.registerOnDisconnect(wsOnDisconnect);
 
+  timeManager.registerSecChange(onSecUpdate);
   timeManager.registerMinChange(onMinUpdate);
 
   Serial.println("[*] ESP32 STARTED");
@@ -154,9 +161,53 @@ void sendTempData() {
   webclient.sendBuff(buf, sizeof(buf));
 }
 
+void sendLightData() {
+  int average = 0;
+  for (int i = 0; i < samples; i++) {
+    average += analogRead(35);
+  }
+  average = round(average / samples);
+
+  Serial.println("Light average");
+  Serial.println(average);
+
+  int samplesSize = ceil((float)average / 0xff);
+
+  Serial.println("Light samples size");
+  Serial.println(samplesSize);
+  
+  const int bufSize = samplesSize + 6;
+
+  int syncedTime[2];
+  timeManager.getTime(syncedTime);
+
+  byte buf[bufSize] = {0x1, 0x1, 0x0, syncedTime[0], syncedTime[1], samplesSize};
+
+  for (int i = 0; i < samplesSize; i++) {
+    int val = 0xff;
+    if (i == samplesSize - 1) val = average - ((bufSize - 1) * 0xff);
+    
+    buf[6 + i] = val;
+  }
+
+  webclient.sendBuff(buf, sizeof(buf));
+}
+
+void onSecUpdate(int min) {
+  // lastGeneralUpdate += 1;
+
+  // if (lastGeneralUpdate >= 10) {
+  //   sendTempData();
+  //   sendLightData();
+
+  //   lastGeneralUpdate = 0;
+  // }
+}
+
 void onMinUpdate(int min) {
   Serial.println("Minute changed");
   sendTempData();
+  sendLightData();
 }
 
 void wsOnConnect() {
@@ -187,22 +238,128 @@ void wsOnDisconnect() {
 // 0x2 - Execução de ações
 
 // [1] - Ação a ser executada
-//  |_ [0] 0x0
+//  |_ [0] 0x0 - Light/Temp Handler
 //  |   |_ [1] 0x0 - Info de nivel de luz
 //  |   |_ [1] 0x1 - Info de temperatura
 //  |   |_ [1] 0x2 - Setar cor
 //  |   |_ [1] 0x3 - Ativar/Desativar iluminação
-//  |_ [0] 0x1
+//  |_ [0] 0x1 - Feeding Handler
 //  |   |_ [1] 0x0 - Adicionar um novo Tempo
 //  |   |_ [1] 0x1 - Remover um tempo
 //  |   |_ [1] 0x2 - Editar um tempo
 //  |   |_ [1] 0x3 - Sincronizar timer
 //  |   |_ [1] 0x4 - Toogle option
 //  |   |_ [1] 0x5 - Acionar alimentação
-//  |_ [0] 0x2
+//  |_ [0] 0x2 - Camera
 //      |_ [1] 0x0 - Toggle Camera
 
 // [2:x] - Parametros
+
+void generalHandler(int* data, int dataLen) {
+  Serial.println("Reached general handler");
+  
+  if (data[1] == 0x2) {
+    int rgb[3] = {data[2], data[3], data[4]};
+
+    led_manager.setColor(rgb);
+  } else if (data[1] == 0x3) {
+    int state = data[2];
+
+    if (state) {
+      led_manager.start();
+    } else {
+      led_manager.stop();
+      led_manager.clear();
+    }
+  } else if (data[1] == 0x4) {
+    if (data[2]) {
+      led_manager.mode = 0x5;
+    } else {
+      led_manager.mode = 0x1;
+      led_manager.showSolidColor();
+    }
+  } else if (data[1] == 0x5) {
+    if (data[2]) {
+      led_manager.setSpectrumInfo(1, 30, 10, 0, 0);
+    } else {
+      led_manager.setSpectrumInfo(1, 30, 150, 0, 0);
+    }
+  } else if (data[1] == 0x6) {
+    Serial.println("Toggling light auto control");
+
+    led_manager.setAutoIntensity(data[2]);
+  }
+}
+
+void feedingHandler(int* data, int dataLen) {
+  Serial.println("Reached feeding handler");
+  
+  if (data[1] == 0x0) {
+    int hour = data[2];
+    int minutes = data[3];
+    int stateHex = data[4];
+    int waterFlowTime = data[5];
+    int foodBuffLen = data[6];
+    int foodAmount = 0;
+
+    for (int i = 0; i < foodBuffLen; i++) {
+      foodAmount += data[7 + i];
+    }
+
+    bool state = false;
+    if (stateHex != 0) state = true;
+
+    timeManager.addTime(hour, minutes, foodAmount, waterFlowTime, state);
+  } else if (data[1] == 0x1) {
+    int hour = data[2];
+    int minutes = data[3];
+
+    timeManager.removeTime(hour, minutes);
+  } else if (data[1] == 0x2) {
+    int oldH = data[2];
+    int oldM = data[3];
+    int newH = data[4];
+    int newM = data[5];
+    int WFT = data[6];
+    int foodBuffLen = data[7];
+    int foodAmount = 0;
+
+    for (int i = 0; i < foodBuffLen; i++) {
+      foodAmount += data[8 + i];
+    }
+    
+    timeManager.editTime(oldH, oldM, newH, newM, foodAmount, WFT);
+  } else if (data[1] == 0x3) {
+    timeManager.syncTime(data[2], data[3], data[4]);
+  } else if (data[1] == 0x4) {
+    if (data[2] == 0x0) {
+      bool state = false;
+      if (data[3] != 0) state = true;
+      
+      timeManager.setOption("waterFlow", state); 
+    } else if (data[2] == 0x1) {
+      bool state = false;
+      if (data[3] != 0) state = true;
+      
+      timeManager.setOption("auto", state); 
+    } else if (data[2] == 0x2) {
+      bool state = false;
+      if (data[5] != 0) state = true;
+      
+      timeManager.setTimeState(data[3], data[4], state); 
+    }
+  } else if (data[1] == 0x5) {
+    int foodBuffLen = data[2];
+    int foodAmount = 0;
+
+    for (int i = 0; i < foodBuffLen; i++) {
+      foodAmount += data[3 + i];
+    }
+    
+    timeManager.enableFeed(foodAmount);
+  }
+}
+
 void onData(int* data, int dataLen) {
   /*for (int i = 0; i < dataLen; i++) {
     Serial.print("Packet index ");
@@ -211,100 +368,13 @@ void onData(int* data, int dataLen) {
     Serial.println(data[i]);
   }*/
 
-  if (data[0] == 0x0) {
-    if (data[1] == 0x2) {
-      int rgb[3] = {data[2], data[3], data[4]};
+  Serial.println((int)handlers[data[0]]);
 
-      led_manager.setColor(rgb);
-    } else if (data[1] == 0x3) {
-      int state = data[2];
+  if ((int)handlers[data[0]] != 0) handlers[data[0]](data, dataLen);
 
-      if (state) {
-        led_manager.start();
-      } else {
-        led_manager.stop();
-        led_manager.clear();
-      }
-    } else if (data[1] == 0x4) {
-      if (data[2]) {
-        led_manager.mode = 0x5;
-      } else {
-        led_manager.mode = 0x1;
-        led_manager.showSolidColor();
-      }
-    } else if (data[1] == 0x5) {
-      if (data[2]) {
-        led_manager.setSpectrumInfo(1, 30, 10, 0, 0);
-      } else {
-        led_manager.setSpectrumInfo(1, 30, 150, 0, 0);
-      }
-    }
-  } else if (data[0] == 0x1) {
-    if (data[1] == 0x0) {
-      int hour = data[2];
-      int minutes = data[3];
-      int stateHex = data[4];
-      int waterFlowTime = data[5];
-      int foodBuffLen = data[6];
-      int foodAmount = 0;
-
-      for (int i = 0; i < foodBuffLen; i++) {
-        foodAmount += data[7 + i];
-      }
-
-      bool state = false;
-      if (stateHex != 0) state = true;
-
-      timeManager.addTime(hour, minutes, foodAmount, waterFlowTime, state);
-    } else if (data[1] == 0x1) {
-      int hour = data[2];
-      int minutes = data[3];
-
-      timeManager.removeTime(hour, minutes);
-    } else if (data[1] == 0x2) {
-      int oldH = data[2];
-      int oldM = data[3];
-      int newH = data[4];
-      int newM = data[5];
-      int WFT = data[6];
-      int foodBuffLen = data[7];
-      int foodAmount = 0;
-
-      for (int i = 0; i < foodBuffLen; i++) {
-        foodAmount += data[8 + i];
-      }
-      
-      timeManager.editTime(oldH, oldM, newH, newM, foodAmount, WFT);
-    } else if (data[1] == 0x3) {
-      timeManager.syncTime(data[2], data[3], data[4]);
-    } else if (data[1] == 0x4) {
-      if (data[2] == 0x0) {
-        bool state = false;
-        if (data[3] != 0) state = true;
-        
-        timeManager.setOption("waterFlow", state); 
-      } else if (data[2] == 0x1) {
-        bool state = false;
-        if (data[3] != 0) state = true;
-        
-        timeManager.setOption("auto", state); 
-      } else if (data[2] == 0x2) {
-        bool state = false;
-        if (data[5] != 0) state = true;
-        
-        timeManager.setTimeState(data[3], data[4], state); 
-      }
-    } else if (data[1] == 0x5) {
-      int foodBuffLen = data[2];
-      int foodAmount = 0;
-
-      for (int i = 0; i < foodBuffLen; i++) {
-        foodAmount += data[3 + i];
-      }
-      
-      timeManager.enableFeed(foodAmount);
-    }
-  } else if (data[0] == 0x2) {
+  //handlers[data[0]](data, dataLen);
+  
+  if (data[0] == 0x2) {
     if (data[1] == 0x0) {
       if (data[2] == 0x0) {
         updateCameraImg = false;

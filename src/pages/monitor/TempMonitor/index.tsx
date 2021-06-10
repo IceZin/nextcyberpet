@@ -38,7 +38,7 @@ export function TempMonitor(props: MonitorProps) {
             data: {
                 labels: [],
                 datasets: [{
-                    label: "Light Level",
+                    label: "Temperatura",
                     data: [],
                     fill: false,
                     backgroundColor: '#ffffff',

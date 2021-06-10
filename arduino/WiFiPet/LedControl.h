@@ -15,6 +15,7 @@ class LedControl {
     void autoUpdate();
     void setupLeds();
     void showSolidColor();
+    void setAutoIntensity(bool state);
     void setColor(int* rgb);
     void setColorType(int type);
     void setLen(int len);
@@ -80,6 +81,10 @@ class LedControl {
     
     int breathIntensity = 0;
     bool breathDescend = false;
+
+    bool autoIntensityCtrl = false;
+    float lightIntensity = 1.0;
+    long lastLightUpdate = 0;
 
     bool blinkLed = false;
     bool blinking = false;

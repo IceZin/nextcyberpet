@@ -87,17 +87,34 @@ void LedControl::update() {
   
       if (update_delay > 0) lastUpdate = millis();
     }
+
+    if (autoIntensityCtrl and millis() - lastLightUpdate >= 100) {
+      lightIntensity = (analogRead(35) / 1023.0) * -1;
+      lightIntensity += 1;
+      showSolidColor();
+
+      Serial.println(lightIntensity);
+      lastLightUpdate = millis();
+    }
   }
 }
 
 void LedControl::showSolidColor() {
   if (clr_type == 0) {
-    fill_solid(strip, leds, CRGB(strip_color[0], strip_color[1], strip_color[2]));
+    fill_solid(strip, leds, CRGB(
+      strip_color[0] * lightIntensity,
+      strip_color[1] * lightIntensity,
+      strip_color[2] * lightIntensity
+    ));
     FastLED.show();
   } else if (clr_type == 1 or clr_type == 2) {
     led = 0;
     setFade();
   }
+}
+
+void LedControl::setAutoIntensity(bool state) {
+  autoIntensityCtrl = state;
 }
 
 void LedControl::setColor(int* rgb) {

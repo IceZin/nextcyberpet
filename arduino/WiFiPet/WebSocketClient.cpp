@@ -2,10 +2,7 @@
 
 WebSocketClient::WebSocketClient(String p, String h, String n, String a) {
   client = new WiFiClient;
-  WiFi.mode(WIFI_STA);
-
-  Serial.println(p);
-  Serial.println(h);
+  WiFi.mode(WIFI_MODE_STA);
 
   path = p;
   host = h;
@@ -28,6 +25,8 @@ void WebSocketClient::connectToWifi() {
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
   }
+
+  Serial.println(WiFi.localIP());
 }
 
 void WebSocketClient::connectToWs() {
@@ -44,6 +43,7 @@ void WebSocketClient::connectToWs() {
       "\r\n";
 
   client->println(handshake.c_str());
+  client->flush();
   awaitTime = millis();
 }
 
@@ -65,12 +65,15 @@ void WebSocketClient::writePic(const char *buf, int len) {
   client->write(startFrame, sizeof(startFrame));
   client->write(buf, len);
   client->write(endFrame, sizeof(endFrame));
+  client->flush();
 
   uploadInProgress = false;
 }
 
 void WebSocketClient::sendBuff(byte buf[], int len) {
   client->write(buf, len);
+  client->flush();
+  delay(1);
 }
 
 void WebSocketClient::readWs() {
@@ -155,7 +158,7 @@ void WebSocketClient::update() {
   if (!client->connected()) {
     if (!awaitingUpgrade) onDisconnect();
     client->connect(host.c_str(), 1108);
-    client->setNoDelay(1);
+    //client->setNoDelay(true);
     awaitingUpgrade = true;
   }
   

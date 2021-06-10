@@ -147,7 +147,7 @@ void FeedTimeManager::update() {
       }
     }
 
-    //onSecChange(syncedSec);
+    onSecChange(syncedSec);
   }
 
   if (waterFlow and !lockWaterFlow) {
@@ -165,7 +165,7 @@ void FeedTimeManager::update() {
   }
 }
 
-void FeedTimeManager:enableFeed(int FA) {
+void FeedTimeManager::enableFeed(int FA) {
   if (feeding) return;
 
   feedingDuration = FA * 10;

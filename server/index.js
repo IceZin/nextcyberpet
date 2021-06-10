@@ -35,15 +35,17 @@ const lightInfo = Channels.newChannel("LightMonitor", {
     light: false,
     spectrum: false,
     mobileAudio: false,
-    chartData: {}
+    chartData: []
 });
 const tempInfo = Channels.newChannel("TempMonitor", {
     autoTempCtrl: false,
     airFlow: false,
     chartData: []
 });
-const camInfo = Channels.newChannel("CameraMonitor", {
-    showOnMenu: false
+const camInfo = Channels.newChannel("WeightMonitor", {
+    maxIdealWeight: undefined,
+    minIdealWeight: undefined,
+    weightsData: {}
 });
 
 console.log(feedInfo);
@@ -183,11 +185,17 @@ const foodMonitorHandler = {
     "feedPet": (data) => {
         let foodAmount = data.value;
         let foodBuff = [];
+
         while (foodAmount >= 255) {
             foodBuff.push(0xff);
             foodAmount -= 255;
         }
         if (foodAmount > 0) foodBuff.push(foodAmount);
+
+        client.sendBuffer(Buffer.from(
+            [0x1, 0x3 + foodBuff.length, 0x1, 0x5,
+            foodBuff.length, ...foodBuff]
+        ));
     }
 }
 
@@ -213,6 +221,10 @@ lightInfo.registerUpdateCallback((option) => {
     } else if (option == "mobileAudio") {
         client.sendBuffer(Buffer.from(
             [0x1, 0x3, 0x0, 0x5, lightInfo.getOption(option)]
+        ))
+    } else if (option == "auto") {
+        client.sendBuffer(Buffer.from(
+            [0x1, 0x3, 0x0, 0x6, lightInfo.getOption(option)]
         ))
     }
 
@@ -329,7 +341,7 @@ Channels.registerCallback("TempMonitor", (data) => {
 
 // [---] Camera Monitor Channel [---]
 
-const cameraMonitorHandler = {
+const weightMonitorHandler = {
     "toggleOption": (data) => {
         if (camInfo.options[data.option] != null) {
             camInfo.setOption(data.option, !camInfo.options[data.option])
@@ -337,9 +349,9 @@ const cameraMonitorHandler = {
     }
 }
 
-Channels.registerCallback("CameraMonitor", (data) => {
+Channels.registerCallback("WeightMonitor", (data) => {
     try {
-        cameraMonitorHandler[data.action](data);
+        weightMonitorHandler[data.action](data);
     } catch (error) {
         
     }
@@ -409,15 +421,32 @@ const dvcFeedManager = {
 
 const dvcLightManager = {
     0x0: (data) => {
-        data.slice(0, 1);
+        data = data.slice(3, data.length);
 
-        /*temperatureInfo.times.push({
-            time: 
+        console.log("Reached light");
+        console.log(data);
+
+        if (lightInfo.options.chartData.length == 10) {
+            lightInfo.options.chartData.splice(0, 1);
+        }
+
+        let lightLevel = 0;
+        for (let i = 0; i < data[2]; i++) lightLevel += data[3 + i];
+
+        lightInfo.options.chartData.push({
+            time: [data[0], data[1]],
+            lightLevel
         })
 
         broadcast({
-            
-        })*/
+            type: 0x1,
+            channel: "LightMonitor",
+            data: {
+                action: "newLightTime",
+                time: `${data[0]}:${data[1]}`,
+                lightLevel
+            }
+        })
     },
     0x1: (data) => {
         data.slice(0, 1);
@@ -461,24 +490,20 @@ const dvcTempManager = {
     }
 }
 
-var camPacketInProgress = false;
-var camImg = Buffer.from([]);
-
-const dvcCameraManager = {
+const dvcWeightManager = {
     0x0: (data) => {
-        if (data[3] == 0xf) {
-            camPacketInProgress = true;
-            console.log("Pic frame started");
-            camImg = Buffer.from([]);
-        } else if (data[3] == 0xe) {
-            camPacketInProgress = false;
+        if (data[3] == 0x0) {
+            broadcast({
+                type: 0x1,
+                channel: "WeightMonitor",
+                data: {
+                    action: "newWeightData",
+                    date: `${data[0]}/${data[1]}/${}`,
+                    time: `${data[0]}:${data[1]}`,
+                    lightLevel
+                }
+            })
         }
-    },
-    0x1: (data) => {
-        data.splice(0, 1);
-    },
-    0x2: (data) => {
-        data.splice(0, 1);
     }
 }
 
@@ -486,7 +511,7 @@ const dvcChannels = {
     0x0: dvcFeedManager,
     0x1: dvcLightManager,
     0x2: dvcTempManager,
-    0x3: dvcCameraManager
+    0x3: dvcWeightManager
 }
 
 function syncDevice() {
@@ -500,6 +525,10 @@ function syncDevice() {
     //Set light state
     client.sendBuffer(Buffer.from(
         [0x1, 0x3, 0x0, 0x3, lightInfo.getOption("light")]
+    ))
+
+    client.sendBuffer(Buffer.from(
+        [0x1, 0x3, 0x0, 0x6, lightInfo.getOption("auto")]
     ))
 
     client.sendBuffer(Buffer.from(
@@ -531,27 +560,6 @@ const upgradeHandlers = {
 
         client.on("data", function(data) {
             if (data.length < 10) console.log(data);
-
-            if (camPacketInProgress) {
-                camImg = Buffer.concat([camImg, data]);
-
-                if (data[1] == 0x3 && data[2] == 0x0 && data[3] == 0xe) {
-                    camPacketInProgress = false;
-                    console.log(camImg);
-                    console.log("Pic frame ended");
-                    broadcast({
-                        type: 0x1,
-                        channel: "CameraMonitor",
-                        data: {
-                            action: "showImage",
-                            camImg
-                        }
-                    })
-
-                    fs.writeFileSync('rgb565.png', camImg)
-                }
-                return;
-            }
 
             try {
                 if (data[0] == 0x1) {
