@@ -12,7 +12,7 @@ HX711 weightSensor;
 WiFiClient client;
 WebSocketClient webclient("/", "192.168.0.10", "ESP32", "esp32");
 LedControl led_manager;
-FeedTimeManager timeManager(25, 4);
+FeedTimeManager timeManager(25, 4, 26);
 
 bool updateCameraImg = true;
 
