@@ -1,11 +1,13 @@
 #include "FeedTimeManager.h"
 
-FeedTimeManager::FeedTimeManager(int wPin, int fPin) {
+FeedTimeManager::FeedTimeManager(int wPin, int fPin, int wSensor) {
   waterPin = wPin;
   feederPin = fPin;
+  waterSensor = wSensor;
 
   pinMode(waterPin, OUTPUT);
   pinMode(feederPin, OUTPUT);
+  pinMode(waterSensor, INPUT);
 }
 
 void FeedTimeManager::registerSecChange(void (*event)(int)) {
@@ -151,6 +153,15 @@ void FeedTimeManager::update() {
   }
 
   if (waterFlow and !lockWaterFlow) {
+    if (digitalRead(waterSensor) == HIGH) {
+      digitalWrite(waterPin, LOW);
+      sensorDelay = millis();
+    } else {
+      if (millis() - sensorDelay >= 5000) {
+        digitalWrite(waterPin, HIGH);
+      }
+    }
+    
     if (millis() - feedingStartTime >= waterDuration[activeTime]) {
       waterFlow = false;
       digitalWrite(waterPin, LOW);

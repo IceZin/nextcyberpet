@@ -28,7 +28,7 @@ type PageInfo = {
     img64: String
 }
 
-export function CameraMonitor(props: MonitorProps) {
+export function WeightMonitor(props: MonitorProps) {
     let [pageInfo, setPageInfo] = useState({} as PageInfo);
 
     let canvasRef = useRef<HTMLCanvasElement>();
@@ -53,6 +53,12 @@ export function CameraMonitor(props: MonitorProps) {
 
     return (
         <div className={styles.content}>
+            <Box
+                name="Definição de peso"
+            >
+                
+            </Box>
+
             <BoxList 
                 name="Monitoramento de Peso"
                 onFilterClick={() => {
@@ -60,10 +66,10 @@ export function CameraMonitor(props: MonitorProps) {
                 }}
             >
                 <WeightBox
-                    date="09/06"
+                    date="09/06/2021"
                     time="13:00"
                     weight="18.7Kg"
-                    severity="overweight"
+                    severity="normal"
                 />
             </BoxList>
         </div>

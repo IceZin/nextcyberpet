@@ -5,6 +5,9 @@
 #include "LedControl.h"
 #include <WiFiClientSecure.h>
 #include <WiFiClient.h>
+#include "HX711.h"
+
+HX711 weightSensor;
 
 WiFiClient client;
 WebSocketClient webclient("/", "192.168.0.10", "ESP32", "esp32");
@@ -38,51 +41,6 @@ void feedingHandler(int*, int);
 
 void (*handlers[])(int*, int) = {generalHandler, feedingHandler};
 
-static camera_config_t camera_config = {
-    .pin_pwdn = -1,
-    .pin_reset = -1,
-    .pin_xclk = 14,
-    .pin_sscb_sda = 13,
-    .pin_sscb_scl = 5,
-
-    .pin_d7 = 21,
-    .pin_d6 = 27,
-    .pin_d5 = 22,
-    .pin_d4 = 35,
-    .pin_d3 = 23,
-    .pin_d2 = 34,
-    .pin_d1 = 26,
-    .pin_d0 = 39,
-    .pin_vsync = 18,
-    .pin_href = 12,
-    .pin_pclk = 19,
-
-    //XCLK 20MHz or 10MHz for OV2640 double FPS (Experimental)
-    .xclk_freq_hz = 20000000,
-    .ledc_timer = LEDC_TIMER_0,
-    .ledc_channel = LEDC_CHANNEL_0,
-
-    .pixel_format = PIXFORMAT_RGB565, //YUV422,GRAYSCALE,RGB565,JPEG
-    .frame_size = FRAMESIZE_QQVGA,    //QQVGA-UXGA Do not use sizes above QVGA when not JPEG
-
-    .jpeg_quality = 0, //0-63 lower number means higher quality
-    .fb_count = 1       //if more than one, i2s runs in continuous mode. Use only with JPEG
-};
-
-static esp_err_t init_camera()
-{
-    //initialize the camera
-    esp_err_t err = esp_camera_init(&camera_config);
-    while (err != ESP_OK)
-    {
-        Serial.println("[!] Error during camera initialization");
-        err = esp_camera_init(&camera_config);
-        delay(1000);
-    }
-
-    return ESP_OK;
-}
-
 void setup() {
   analogReadResolution(10);
   pinMode(32, INPUT);
@@ -111,7 +69,7 @@ void setup() {
   led_manager.start();
   led_manager.setColor(red);
 
-  //init_camera();
+  weightSensor.begin(23, 22);
 }
  
 void loop() {
@@ -119,23 +77,6 @@ void loop() {
 
   led_manager.update();
   timeManager.update();
-
-  /*if (updateCameraImg and millis() - lastCameraPic >= 1000) {
-    camera_fb_t *pic = esp_camera_fb_get();
-    const char *data = (const char *)pic->buf;
-
-    Serial.println("[*] Sending pic");
-    long uplStart = millis();
-    
-    webclient.writePic(data, pic->len);
-
-    Serial.println("[*] Sent");
-    Serial.print("[*] Upload took ");
-    Serial.print(millis() - uplStart);
-    Serial.println(" ms");
-
-    lastCameraPic = millis();
-  }*/
 }
 
 void sendTempData() {
@@ -193,6 +134,38 @@ void sendLightData() {
   webclient.sendBuff(buf, sizeof(buf));
 }
 
+void sendWeightData() {
+  int average = 0;
+  for (int i = 0; i < samples; i++) {
+    average += analogRead(35);
+  }
+  average = round(average / samples);
+
+  Serial.println("Light average");
+  Serial.println(average);
+
+  int samplesSize = ceil((float)average / 0xff);
+
+  Serial.println("Light samples size");
+  Serial.println(samplesSize);
+  
+  const int bufSize = samplesSize + 6;
+
+  int syncedTime[2];
+  timeManager.getTime(syncedTime);
+
+  byte buf[bufSize] = {0x1, 0x1, 0x0, syncedTime[0], syncedTime[1], samplesSize};
+
+  for (int i = 0; i < samplesSize; i++) {
+    int val = 0xff;
+    if (i == samplesSize - 1) val = average - ((bufSize - 1) * 0xff);
+    
+    buf[6 + i] = val;
+  }
+
+  webclient.sendBuff(buf, sizeof(buf));
+}
+
 void onSecUpdate(int min) {
   // lastGeneralUpdate += 1;
 
@@ -202,10 +175,16 @@ void onSecUpdate(int min) {
 
   //   lastGeneralUpdate = 0;
   // }
+
+  if (weightSensor.is_ready()) {
+    long reading = weightSensor.read();
+    Serial.print("HX711 reading: ");
+    Serial.println(reading);
+  }
 }
 
 void onMinUpdate(int min) {
-  Serial.println("Minute changed");
+  //Serial.println("Minute changed");
   sendTempData();
   sendLightData();
 }

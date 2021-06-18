@@ -42,7 +42,7 @@ const tempInfo = Channels.newChannel("TempMonitor", {
     airFlow: false,
     chartData: []
 });
-const camInfo = Channels.newChannel("WeightMonitor", {
+const weightInfo = Channels.newChannel("WeightMonitor", {
     maxIdealWeight: undefined,
     minIdealWeight: undefined,
     weightsData: {}
@@ -210,6 +210,16 @@ Channels.registerCallback("FoodMonitor", (data) => {
 // [---] Light Monitor Channel [---]
 
 lightInfo.registerUpdateCallback((option) => {
+    broadcast({
+        type: 0x1,
+        channel: "LightMonitor",
+        data: {
+            action: "toggleOption",
+            option: option,
+            state: lightInfo.getOption(option)
+        }
+    })
+
     if (option == "light") {
         client.sendBuffer(Buffer.from(
             [0x1, 0x3, 0x0, 0x3, lightInfo.getOption(option)]
@@ -227,16 +237,6 @@ lightInfo.registerUpdateCallback((option) => {
             [0x1, 0x3, 0x0, 0x6, lightInfo.getOption(option)]
         ))
     }
-
-    broadcast({
-        type: 0x1,
-        channel: "LightMonitor",
-        data: {
-            action: "toggleOption",
-            option: option,
-            state: lightInfo.getOption(option)
-        }
-    })
 })
 
 const lightMonitorHandler = {
@@ -493,14 +493,54 @@ const dvcTempManager = {
 const dvcWeightManager = {
     0x0: (data) => {
         if (data[3] == 0x0) {
+            let weight = data[2] + (data[3] / 10);
+            let severity = undefined;
+
+            let maxWeight = weightInfo.maxIdealWeight;
+            let minWeight = weightInfo.minIdealWeight;
+
+            if (maxWeight && minWeight) {
+                if (weight > maxWeight) {
+                    severity = "overweight";
+                } else if (weight < minWeight) {
+                    severity = "underweight";
+                } else {
+                    severity = "normal";
+                }
+            }
+
+            let date = new Date().toLocaleDateString();
+            date = date.split('/');
+
+            let day = parseInt(date[0]);
+            let month = parseInt(date[1]);
+            let year = parseInt(date[2]);
+
+            if (!weightInfo.options.weightsData[year]) {
+                weightInfo.options.weightsData[year] = {};
+            }
+
+            if (!weightInfo.options.weightsData[year][month]) {
+                weightInfo.options.weightsData[year][month] = {};
+            }
+
+            if (!weightInfo.options.weightsData[year][month][day]) {
+                weightInfo.options.weightsData[year][month][day] = {
+                    time: `${data[0]}:${data[1]}`,
+                    weight,
+                    severity
+                };
+            }
+
             broadcast({
                 type: 0x1,
                 channel: "WeightMonitor",
                 data: {
                     action: "newWeightData",
-                    date: `${data[0]}/${data[1]}/${}`,
+                    date,
                     time: `${data[0]}:${data[1]}`,
-                    lightLevel
+                    weight,
+                    severity
                 }
             })
         }
@@ -653,11 +693,11 @@ const apiPaths = {
             }
         }));
     },
-    'camera_info': (res, parsedUrl) => {
+    'weight_info': (res, parsedUrl) => {
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({
-            camInfo: camInfo.options
+            weightInfo: weightInfo.options
         }));
     }
 }
@@ -681,10 +721,10 @@ const pathsHandler = {
 
 app.prepare().then(() => {
     const httpserver = createServer((req, res) => {
-        console.log("[*] New Request");
+        /*console.log("[*] New Request");
         console.log(req.method);
         console.log(req.url);
-        console.log(req.headers);
+        console.log(req.headers);*/
 
         const parsedUrl = parse(req.url, true);
         let { pathname, query } = parsedUrl;

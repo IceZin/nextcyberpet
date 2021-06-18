@@ -24,6 +24,7 @@ class FeedTimeManager {
   private:
     int waterPin;
     int feederPin;
+    int waterSensor;
     
     int timesLen = 0;
     int activeTime = 0;
@@ -35,6 +36,7 @@ class FeedTimeManager {
     long lastSync = 0;
     long feedingStartTime = 0;
     long feedingDuration = 0;
+    long sensorDelay = 0;
 
     long feedTimes[24][2];
     bool feedTimesState[24];

@@ -125,6 +125,8 @@ export function LightMonitor(props: MonitorProps) {
         if (ws == undefined) return;
 
         ws.on("LightMonitor", "data", (packet) => {
+            console.log(packet)
+
             if (packet.action == "newLightTime") {
                 let dataset = chart.data.datasets[0];
 

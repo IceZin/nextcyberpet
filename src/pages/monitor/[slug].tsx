@@ -2,7 +2,7 @@ import {FoodMonitor} from './FoodMonitor'
 import {TempMonitor} from './TempMonitor'
 import Error from 'next/error'
 import { LightMonitor } from './LightMonitor'
-import { CameraMonitor } from './CameraMonitor'
+import { WeightMonitor } from './WeightMonitor'
 
 type StaticProps = {
     boxes: Object,
@@ -22,7 +22,7 @@ type LightFetch = {
     lightInfo: Object
 }
 
-type CameraFetch = {
+type WeightFetch = {
 }
 
 export default function Monitor(props) {
@@ -38,9 +38,9 @@ export default function Monitor(props) {
         return (
             <TempMonitor {...props} />
         )
-    } else if (props.path == "camera") {
+    } else if (props.path == "weight") {
         return (
-            <CameraMonitor {...props} />
+            <WeightMonitor {...props} />
         )
     } else {
         return (
@@ -92,13 +92,13 @@ export const getStaticProps = async (ctx) => {
                 pageInfo: jsondata?.temperatureInfo
             }
         }
-    } else if (slug == "camera") {
-        let data = await fetch('http://localhost:1108/api/camera_info');
-        const jsondata: CameraFetch = await data.json();
+    } else if (slug == "weight") {
+        let data = await fetch('http://localhost:1108/api/weight_info');
+        const jsondata: WeightFetch = await data.json();
 
         return {
             props: {
-                path: "camera"
+                path: "weight"
             }
         }
     }

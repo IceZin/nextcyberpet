@@ -61,7 +61,7 @@ export default function Home(props: PageInfo) {
       <Box name="Monitoramento & Controle" displayType="grid">
         <BoxHrefButton src="/lightbulb-solid.svg" title="Iluminacao" href="/monitor/light"></BoxHrefButton>
         <BoxHrefButton src="/bone-solid.svg" title="Alimentacao" href="/monitor/food"></BoxHrefButton>
-        <BoxHrefButton src="/video-solid.svg" title="Peso" href="/monitor/camera"></BoxHrefButton>
+        <BoxHrefButton src="/weight-solid.svg" title="Peso" href="/monitor/weight"></BoxHrefButton>
         <BoxHrefButton src="/thermometer-half-solid.svg" title="Temperatura" href="/monitor/temperature"></BoxHrefButton>
       </Box>
 

@@ -34,7 +34,6 @@
 
             .date, .time {
                 height: 2rem;
-                width: 4rem;
 
                 display: flex;
                 justify-content: center;
@@ -43,6 +42,14 @@
                 border-radius: 0.5rem;
 
                 background-color: #444;
+            }
+
+            .date {
+                width: 8rem;
+            }
+
+            .time {
+                width: 4rem;
             }
 
             .weightBox {
