@@ -1,8 +1,8 @@
 .box {
     width: 100%;
-    height: auto;
+    min-height: 6rem;
 
-    background-color: var(--red-100);
+    background-color: #222;
 
     display: flex;
     position: relative;

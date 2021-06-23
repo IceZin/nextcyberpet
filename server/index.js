@@ -209,7 +209,42 @@ Channels.registerCallback("FoodMonitor", (data) => {
 
 // [---] Light Monitor Channel [---]
 
+var sharedLightVars = {
+    light: (state) => {
+        mainInfo.light = state;
+
+        broadcast({
+            type: 0x1,
+            channel: "Main",
+            data: {
+                action: "toggleOption",
+                option: "light",
+                state
+            }
+        })
+    },
+    auto: (state) => {
+        mainInfo.autoLightCtrl = state;
+
+        broadcast({
+            type: 0x1,
+            channel: "Main",
+            data: {
+                action: "toggleOption",
+                option: "autoLightCtrl",
+                state
+            }
+        })
+    }
+}
+
 lightInfo.registerUpdateCallback((option) => {
+    try {
+        sharedLightVars[option](lightInfo.getOption(option));
+    } catch (error) {
+        
+    }
+
     broadcast({
         type: 0x1,
         channel: "LightMonitor",
@@ -277,32 +312,7 @@ Channels.registerCallback("LightMonitor", (data) => {
 var temperatureInfo = []
 
 var sharedTempVars = {
-    airFlow: (state) => {
-        mainInfo.airFlow = state;
 
-        broadcast({
-            type: 0x1,
-            channel: "Main",
-            data: {
-                action: "toggleOption",
-                option: "airFlow",
-                state
-            }
-        })
-    },
-    autoTempCtrl: (state) => {
-        mainInfo.airFlow = state;
-
-        broadcast({
-            type: 0x1,
-            channel: "Main",
-            data: {
-                action: "toggleOption",
-                option: "autoTempCtrl",
-                state
-            }
-        })
-    }
 }
 
 tempInfo.registerUpdateCallback((option) => {
@@ -688,8 +698,8 @@ const apiPaths = {
         res.end(JSON.stringify({
             mainInfo: {
                 ...mainInfo.options,
-                autoTempCtrl: tempInfo.options.autoTempCtrl,
-                airFlow: tempInfo.options.airFlow
+                autoLightCtrl: lightInfo.options.auto,
+                light: lightInfo.options.light
             }
         }));
     },

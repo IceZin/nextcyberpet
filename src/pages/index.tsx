@@ -10,8 +10,8 @@ import { WsContext } from '../contexts/WsContext'
 
 type PageInfo = {
   nightMode: boolean
-  autoTempCtrl: boolean
-  airFlow: boolean
+  autoLightCtrl: boolean
+  light: boolean
 }
 
 type Props = {
@@ -68,18 +68,34 @@ export default function Home(props: PageInfo) {
       <Box name="Controle Rapido" displayType="flex">
         <BoxSwitch 
           src="/moon-solid.svg" 
-          state={pageInfo.nightMode} onClick={(e) => {
+          state={pageInfo.light} onClick={(e) => {
               ws.sendJSON({
                   type: 0x1,
                   data: {
-                      channel: "Main",
+                      channel: "LightMonitor",
                       action: "toggleOption",
-                      option: "nightMode"
+                      option: "light"
                   }
               })
           }} 
-          title="Modo noturno">
+          title="Iluminação">
         </BoxSwitch>
+
+        <BoxSwitch 
+          src="/moon-solid.svg" 
+          state={pageInfo.autoLightCtrl} onClick={(e) => {
+              ws.sendJSON({
+                  type: 0x1,
+                  data: {
+                      channel: "LightMonitor",
+                      action: "toggleOption",
+                      option: "auto"
+                  }
+              })
+          }} 
+          title="Controle automático de luminosidade">
+        </BoxSwitch>
+        
         <BoxSwitch 
           src="/thermometer-half-solid.svg" 
           state={pageInfo.autoTempCtrl} onClick={(e) => {
@@ -93,20 +109,6 @@ export default function Home(props: PageInfo) {
               })
           }} 
           title="Controle automático de temperatura">
-        </BoxSwitch>
-        <BoxSwitch 
-          src="/wind-solid.svg" 
-          state={pageInfo.airFlow} onClick={(e) => {
-              ws.sendJSON({
-                  type: 0x1,
-                  data: {
-                      channel: "TempMonitor",
-                      action: "toggleOption",
-                      option: "airFlow"
-                  }
-              })
-          }} 
-          title="Ativar ventilação">
         </BoxSwitch>
       </Box>
 
