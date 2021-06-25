@@ -38,6 +38,7 @@ void FeedTimeManager::setOption(String option, bool state) {
   if (option == "waterFlow") {
     waterFlow = state;
     lockWaterFlow = state;
+    flowDelayState = !state;
 
     if (state) digitalWrite(waterPin, HIGH);
     else digitalWrite(waterPin, LOW);
@@ -135,7 +136,7 @@ void FeedTimeManager::update() {
 
           if (!waterFlow and !lockWaterFlow) {
             waterFlow = true;
-            digitalWrite(waterPin, HIGH);
+            flowDelayState = false;
 
             Serial.println("Water Flow Activated");
           }
@@ -153,12 +154,17 @@ void FeedTimeManager::update() {
   }
 
   if (waterFlow and !lockWaterFlow) {
-    if (digitalRead(waterSensor) == HIGH) {
-      digitalWrite(waterPin, LOW);
-      sensorDelay = millis();
+    if (flowDelayState) {
+      if (millis() - sensorDelay >= 4000) {
+        digitalWrite(waterPin, LOW);
+        flowDelayState = false;
+        flowDelay = millis();
+      }
     } else {
-      if (millis() - sensorDelay >= 5000) {
+      if (millis() - sensorDelay >= 6000) {
         digitalWrite(waterPin, HIGH);
+        flowDelayState = true;
+        flowDelay = millis();
       }
     }
     

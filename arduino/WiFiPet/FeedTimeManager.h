@@ -36,7 +36,7 @@ class FeedTimeManager {
     long lastSync = 0;
     long feedingStartTime = 0;
     long feedingDuration = 0;
-    long sensorDelay = 0;
+    long flowDelay = 0;
 
     long feedTimes[24][2];
     bool feedTimesState[24];
@@ -48,6 +48,7 @@ class FeedTimeManager {
     bool waterFlow = false;
     bool lockWaterFlow = false;
     bool feeding = false;
+    bool flowDelayState = false;
 
     void (*onSecChange)(int);
     void (*onMinChange)(int);
